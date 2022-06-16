@@ -29,7 +29,8 @@ size_t engine_read( void *ctx, int32_t select_column,
  * aep_dir: AEP file directory.
  * disk_dir: Disk file directory.
  */
-void* engine_init(const char* host_info, const char* const* peer_host_info, size_t peer_host_info_num, const char* aep_dir, const char* disk_dir);
+void* engine_init(const char* host_info, const char* const* peer_host_info, size_t peer_host_info_num,
+                  const char* aep_dir, const char* disk_dir);
 
 /*
  * Used to release resources when the engine exits normally.

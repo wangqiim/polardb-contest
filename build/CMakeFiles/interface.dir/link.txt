@@ -1,0 +1,1 @@
+/usr/bin/clang++ -g -isysroot /Library/Developer/CommandLineTools/SDKs/MacOSX12.3.sdk -mmacosx-version-min=12.1 -dynamiclib -Wl,-headerpad_max_install_names -o libinterface.dylib -install_name @rpath/libinterface.dylib CMakeFiles/interface.dir/src/interface.cpp.o 

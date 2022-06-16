@@ -1,0 +1,3 @@
+/Users/fanyang/Documents/work/cpp_demo/build/CMakeFiles/interface.dir
+/Users/fanyang/Documents/work/cpp_demo/build/CMakeFiles/edit_cache.dir
+/Users/fanyang/Documents/work/cpp_demo/build/CMakeFiles/rebuild_cache.dir
