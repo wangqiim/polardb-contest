@@ -6,6 +6,14 @@
 extern "C" {
 
 /*
+ * Table schema:
+ * +-------------+-------------------+------------------+-----------------+
+ * | Id(8 bytes) | Userid(128 bytes) |  Name(128 bytes) | Salary(8 bytes) |
+ * +-------------+-------------------+------------------+-----------------+
+ * And long uses small endian.
+ */
+
+/*
  * Writes incoming data to the engine
  */
 void engine_write( void *ctx, const void *data, size_t len);
@@ -23,9 +31,9 @@ size_t engine_read( void *ctx, int32_t select_column,
 /*
  * Initialization interface, which is called when the engine starts.
  * You need to create or recover db from pmem-file.
- * host_info: Local machine information including ip and port.
- * peer_host_info: Information about other machines in the distributed cluster.
- * peer_host_info_num: The num of other machines in the distributed cluster.
+ * host_info: Local machine information including ip and port. This value is nullptr in the preliminary round.
+ * peer_host_info: Information about other machines in the distributed cluster. This value is nullptr in the preliminary round.
+ * peer_host_info_num: The num of other machines in the distributed cluster.  This value is 0 in the preliminary round.
  * aep_dir: AEP file directory, eg : "/mnt/aep/"
  * disk_dir: Disk file directory, eg : "/mnt/disk/"
  */

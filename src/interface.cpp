@@ -34,29 +34,29 @@ size_t engine_read( void *ctx, int32_t select_column,
             case Userid: b = memcmp(column_key,users[i].user_id,column_key_len) == 0; break;
             case Name: b = memcmp(column_key,users[i].name,column_key_len) == 0; break;
             case Salary: b = memcmp(column_key,&users[i].salary,column_key_len) == 0; break;
-            default: break;// wrong
+            default: b = false; break; // wrong
         }
         if(b)
         {
             ++res_num;
             switch(select_column) {
                 case Id: 
-                    b = memcpy(res, &users[i].id, 8); 
+                    memcpy(res, &users[i].id, 8); 
                     res = (char *)res + 8; 
                     break;
                 case Userid: 
-                    b = memcpy(res, users[i].user_id, 128); 
+                    memcpy(res, users[i].user_id, 128); 
                     res = (char *)res + 128; 
                     break;
                 case Name: 
-                    b = memcpy(res, users[i].name, 128); 
+                    memcpy(res, users[i].name, 128); 
                     res = (char *)res + 128; 
                     break;
                 case Salary: 
-                    b = memcpy(res, &users[i].salary, 8); 
+                    memcpy(res, &users[i].salary, 8); 
                     res = (char *)res + 8; 
                     break;
-                default: break;// wrong
+                default: break; // wrong
             }
         }
     }
