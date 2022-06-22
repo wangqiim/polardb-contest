@@ -1,0 +1,6 @@
+make --dry-run --always-make --keep-going --print-directory
+make: Entering directory `/Users/fanyang/Documents/work/cpp_demo'
+make: Leaving directory `/Users/fanyang/Documents/work/cpp_demo'
+ 
+make: *** No targets specified and no makefile found.  Stop.
+

@@ -1,7 +1,0 @@
-[
-{
-  "directory": "/Users/fanyang/Documents/work/cpp_demo/build",
-  "command": "/usr/bin/clang++ -Dinterface_EXPORTS -I/Users/fanyang/Documents/work/cpp_demo/inc -g -isysroot /Library/Developer/CommandLineTools/SDKs/MacOSX12.3.sdk -mmacosx-version-min=12.1 -fPIC -std=gnu++14 -o CMakeFiles/interface.dir/src/interface.cpp.o -c /Users/fanyang/Documents/work/cpp_demo/src/interface.cpp",
-  "file": "/Users/fanyang/Documents/work/cpp_demo/src/interface.cpp"
-}
-]
