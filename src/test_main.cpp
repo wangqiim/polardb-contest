@@ -1,6 +1,8 @@
 #include "../inc/interface.h"
 #include <iostream>
 #include <string.h>
+#include "spdlog/spdlog.h"
+
 
 class TestUser
 {
@@ -15,6 +17,7 @@ enum TestColumn{Id=0,Userid,Name,Salary};
 
 int main()
 {
+    spdlog::info("[main]");
     TestUser user;
     user.id = 0;
     user.salary = 100;
