@@ -6,6 +6,10 @@ set(CMAKE_CXX_STANDARD 14)
 add_subdirectory(third_party)
 include_directories(third_party/spdlog/include)
 
+# unit test
+enable_testing()
+add_subdirectory(test)
+
 # generate .so file
 include_directories(inc)
 add_library(interface
