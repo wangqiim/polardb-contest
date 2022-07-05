@@ -4,7 +4,8 @@ set(CMAKE_CXX_STANDARD 14)
 
 # third_party
 add_subdirectory(third_party)
-include_directories(third_party/spdlog/include)
+include_directories("third_party/spdlog/include")
+include_directories("third_party/leveldb/include")
 
 # unit test
 enable_testing()
