@@ -107,7 +107,7 @@ void* engine_init(const char* host_info, const char* const* peer_host_info, size
                   const char* aep_dir, const char* disk_dir) {
     spdlog::set_level(spdlog::level::debug);
     spdlog::info("[plate engine_init]");
-    plate_engine = new Plate("/tmp/polarDB");
+    plate_engine = new Plate(disk_dir);
     plate_engine->Init();
     return nullptr;
 }

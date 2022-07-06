@@ -1,5 +1,6 @@
 #include <gtest/gtest.h>
 #include "interface.h"
+#include "const.h"
 
 class TestUser
 {
@@ -17,7 +18,8 @@ bool FileExists(const std::string& path) {
 }
 
 int drop_datafile() {
-    std::string path = "/tmp/polarDB/DATA";
+    std::string path = disk_dir;
+    path += kDataFileName;
     if (FileExists(path)) {
         return remove(path.c_str());
     }
@@ -30,7 +32,7 @@ TEST(InterfaceTest, Basic) {
     user.id = 0;
     user.salary = 100;
     memcpy(&user.name,"hello",5);
-    void* ctx = engine_init(nullptr, nullptr, 0, "/mnt/aep/", "/mnt/disk/");
+    void* ctx = engine_init(nullptr, nullptr, 0, "/mnt/aep/", disk_dir);
     engine_write(ctx,&user,sizeof(user));
     char res[2000*128];
     size_t read_cnt = engine_read(ctx, Id, Name, &user.name, 8, res);
@@ -70,7 +72,7 @@ TEST(InterfaceTest, ManyUser) {
     memcpy(&user4.name, "name2", 5);
     user4.salary = 4;
 
-    void* ctx = engine_init(nullptr, nullptr, 0, "/mnt/aep/", "/tmp");
+    void* ctx = engine_init(nullptr, nullptr, 0, "/mnt/aep/", disk_dir);
 
     engine_write(ctx,&user1,sizeof(user1));
     engine_write(ctx,&user2,sizeof(user2));
@@ -114,7 +116,7 @@ TEST(InterfaceTest, Replay) {
     memcpy(&user4.name, "name2", 5);
     user4.salary = 4;
 
-    void* ctx = engine_init(nullptr, nullptr, 0, "/mnt/aep/", "/tmp");
+    void* ctx = engine_init(nullptr, nullptr, 0, "/mnt/aep/", disk_dir);
 
     engine_write(ctx,&user1,sizeof(user1));
     engine_write(ctx,&user2,sizeof(user2));
@@ -130,7 +132,7 @@ TEST(InterfaceTest, Replay) {
 
     engine_deinit(ctx);
 
-    ctx = engine_init(nullptr, nullptr, 0, "/mnt/aep/", "/tmp");
+    ctx = engine_init(nullptr, nullptr, 0, "/mnt/aep/", disk_dir);
     read_cnt = engine_read(ctx, Id, Salary, &user1.salary, 8, res);
     EXPECT_EQ(2, read_cnt);
 

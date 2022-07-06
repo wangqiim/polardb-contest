@@ -1,12 +1,14 @@
 #include <gtest/gtest.h>
 #include "plate.h"
+#include "const.h"
 
 bool FileExists(const std::string& path) {
   return access(path.c_str(), F_OK) == 0;
 }
 
 int drop_datafile() {
-    std::string path = "/tmp/polarDB/DATA";
+    std::string path = disk_dir;
+    path += kDataFileName;
     if (FileExists(path)) {
         return remove(path.c_str());
     }
@@ -40,7 +42,7 @@ void read_record(void *record, void *context) {
 
 TEST(PlateTest, Basic) {
     EXPECT_EQ(0, drop_datafile());
-    Plate plate("/tmp/polarDB");
+    Plate plate(disk_dir);
     plate.Init();
 
     EXPECT_EQ(0, plate.size());
