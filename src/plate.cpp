@@ -23,12 +23,6 @@ Plate::~Plate() {
   if (fd_ > 0) {
     munmap(start_, MAPSIZE);
     close(fd_);
-    std::string path = dir_ + "/" + kDataFileName;
-    if (remove(path.c_str()) == 0) {
-      spdlog::info("remove data file {}", path);
-    } else {
-      spdlog::error("remove data file fail!");
-    }
   }
 }
 

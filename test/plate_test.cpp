@@ -1,6 +1,18 @@
 #include <gtest/gtest.h>
 #include "plate.h"
 
+bool FileExists(const std::string& path) {
+  return access(path.c_str(), F_OK) == 0;
+}
+
+int drop_datafile() {
+    std::string path = "/tmp/polarDB/DATA";
+    if (FileExists(path)) {
+        return remove(path.c_str());
+    }
+    return 0;
+}
+
 class TestUser {
     public:
         int64_t id;
@@ -27,6 +39,7 @@ void read_record(void *record, void *context) {
 }
 
 TEST(PlateTest, Basic) {
+    EXPECT_EQ(0, drop_datafile());
     Plate plate("/tmp/polarDB");
     plate.Init();
 
@@ -54,4 +67,5 @@ TEST(PlateTest, Basic) {
     ret = plate.scan(read_record, reinterpret_cast<void *>(&reader));
     EXPECT_EQ(0, ret);
     EXPECT_EQ(2, reader.get_cnt());
+    EXPECT_EQ(0, drop_datafile());
 }
