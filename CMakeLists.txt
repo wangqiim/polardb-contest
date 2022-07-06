@@ -20,4 +20,5 @@ SHARED
 
 # generate test_main
 add_executable(test_main src/test_main.cpp)
+target_link_libraries(interface leveldb)
 target_link_libraries(test_main interface)
