@@ -169,9 +169,14 @@ std::string gen_random(const int len) {
 void* engine_init(const char* host_info, const char* const* peer_host_info, size_t peer_host_info_num,
                   const char* aep_dir, const char* disk_dir) {
     spdlog::set_level(spdlog::level::debug);
-    srand((unsigned)time(nullptr) * getpid());
     char db_path[30];
-    sprintf(db_path, "%s%s%s", disk_dir, "/", gen_random(8).c_str());
+    if (strncmp(disk_dir, "/mnt", 4) != 0) {
+        srand((unsigned)time(nullptr) * getpid());
+        sprintf(db_path, "%s%s", disk_dir, gen_random(8).c_str());
+    } else {
+        sprintf(db_path, "%s%s", disk_dir, "test");
+    }
+
     spdlog::info("[engine_init] [db_path:{0:s}]", db_path);
     leveldb::Options options;
     options.create_if_missing = true;
