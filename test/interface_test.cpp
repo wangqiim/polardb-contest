@@ -18,7 +18,7 @@ TEST(InterfaceTest, Basic) {
     user.id = 0;
     user.salary = 100;
     memcpy(&user.name,"hello",5);
-    void* ctx = engine_init(nullptr, nullptr, 0, "/mnt/aep/", "/tmp");
+    void* ctx = engine_init(nullptr, nullptr, 0, "/mnt/aep/", "/tmp/");
     engine_write(ctx,&user,sizeof(user));
     char res[2000*128];
     size_t read_cnt = engine_read(ctx, Id, Name, &user.name, 8, res);
