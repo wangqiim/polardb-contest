@@ -2,6 +2,8 @@ cmake_minimum_required(VERSION 3.1)
 project("interface")
 set(CMAKE_CXX_STANDARD 14)
 
+include_directories(src/include)
+
 # third_party
 add_subdirectory(third_party)
 include_directories(third_party/spdlog/include)
@@ -14,8 +16,12 @@ add_subdirectory(test)
 include_directories(inc)
 add_library(interface
 SHARED
-        src/interface.cpp
+        src/plate_interface.cpp
 )
+target_link_libraries(interface plate)
+
+# src
+add_subdirectory(src)
 
 # generate test_main
 add_executable(test_main src/test_main.cpp)
