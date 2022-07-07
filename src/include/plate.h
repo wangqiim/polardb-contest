@@ -1,9 +1,17 @@
 #include <string>
 
 const int RECORDSIZE = 8 + 128 + 128 + 8;
-const int RECORDNUM = 1000000 * 50;
-const int MINIRECORDNUM = 100 * 50;
+const int RECORDNUM = 1000000 * 50; // about 13G think about 32bit overflow
+const int MINIRECORDNUM = 100000 * 50; // 1.3G
 const int MAPSIZE = RECORDSIZE * MINIRECORDNUM;
+
+class MMapFile {
+  public:
+    MMapFile(): fd_(-1), start_(nullptr) {}
+    MMapFile(int fd, char *start): fd_(fd), start_(start) {}
+    int  fd_;
+    char *start_;
+};
 
 class Item {
   public:
@@ -26,12 +34,16 @@ class Plate {
   
     int size();
   private:
+    // sort and record all data (at least one) file by fiile name
+    int gen_sorted_paths(const std::string &dir, std::vector<std::string> &paths);
+    // current spapce is run out, create a new file
+    int create_new_mmapFile();
     // update curr_
     void replay();
 
   private:
-    const std::string dir_;    // data dictory
-    int               fd_;      // mmap fd
-    char              *start_;  // mmap start address
-    Item              *curr_;   // next append offset address
+    const std::string     dir_;      // data dictory
+    std::vector<MMapFile> files_;    // mmap fd
+    MMapFile              *currFile_; // currFile_ = files_[files_.size() - 1]
+    Item                  *curr_;    // next append offset address
 };

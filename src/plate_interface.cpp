@@ -105,7 +105,7 @@ size_t engine_read( void *ctx, int32_t select_column,
 
 void* engine_init(const char* host_info, const char* const* peer_host_info, size_t peer_host_info_num,
                   const char* aep_dir, const char* disk_dir) {
-    spdlog::set_level(spdlog::level::debug);
+    spdlog::set_level(spdlog::level::info);
     spdlog::info("[plate engine_init]");
     plate_engine = new Plate(disk_dir);
     plate_engine->Init();
@@ -114,5 +114,5 @@ void* engine_init(const char* host_info, const char* const* peer_host_info, size
 
 void engine_deinit(void *ctx) {
     spdlog::info("[plate engine_deinit]");
-    plate_engine->~Plate();
+    delete plate_engine;
 }

@@ -1,19 +1,6 @@
 #include <gtest/gtest.h>
 #include "plate.h"
-#include "const.h"
-
-bool FileExists(const std::string& path) {
-  return access(path.c_str(), F_OK) == 0;
-}
-
-int drop_datafile() {
-    std::string path = disk_dir;
-    path += kDataFileName;
-    if (FileExists(path)) {
-        return remove(path.c_str());
-    }
-    return 0;
-}
+#include "test_util.h"
 
 class TestUser {
     public:
@@ -41,33 +28,34 @@ void read_record(void *record, void *context) {
 }
 
 TEST(PlateTest, Basic) {
-    EXPECT_EQ(0, drop_datafile());
-    Plate plate(disk_dir);
-    plate.Init();
+    EXPECT_EQ(0, rmtree(disk_dir));
+    Plate *plate = new Plate(disk_dir);
+    plate->Init();
 
-    EXPECT_EQ(0, plate.size());
+    EXPECT_EQ(0, plate->size());
 
     TestUser user;
     user.id = 0;
     user.salary = 100;
     memcpy(&user.name,"hello",5);
 
-    int ret = plate.append(reinterpret_cast<void *>(&user));
+    int ret = plate->append(reinterpret_cast<void *>(&user));
     EXPECT_EQ(0, ret);
-    EXPECT_EQ(1, plate.size());
+    EXPECT_EQ(1, plate->size());
     
     char res[2000*128];
     Reader reader;
     EXPECT_EQ(0, reader.get_cnt());
-    ret = plate.scan(read_record, reinterpret_cast<void *>(&reader));
+    ret = plate->scan(read_record, reinterpret_cast<void *>(&reader));
     EXPECT_EQ(0, ret);
     EXPECT_EQ(1, reader.get_cnt());
 
-    ret = plate.append(reinterpret_cast<void *>(&user));
+    ret = plate->append(reinterpret_cast<void *>(&user));
     EXPECT_EQ(0, ret);
     reader.reset();
-    ret = plate.scan(read_record, reinterpret_cast<void *>(&reader));
+    ret = plate->scan(read_record, reinterpret_cast<void *>(&reader));
     EXPECT_EQ(0, ret);
     EXPECT_EQ(2, reader.get_cnt());
-    EXPECT_EQ(0, drop_datafile());
+    delete plate;
+    EXPECT_EQ(0, rmtree(disk_dir));
 }
