@@ -1,4 +1,1 @@
-add_library(plate
-SHARED
-        plate.cpp
-)
+add_library(plate STATIC plate.cpp)
