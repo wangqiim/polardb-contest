@@ -9,6 +9,7 @@ const int MAPSIZE = RECORDSIZE * MINIRECORDNUM;
 class Location {
   public:
     Location(): file_id_(-1), offset_(-1) {}
+    Location(int file_id, int offset): file_id_(file_id), offset_(offset) {}
     int file_id_;
     int offset_;
 };
@@ -40,7 +41,7 @@ class Plate {
 
     int get(const Location &location, void * const datas);
 
-    int scan(void (*cb)(void *, void *),  void *context);
+    int scan(void (*cb)(void *user, void *location, void *context), void *context);
   
     int size();
   private:

@@ -12,7 +12,7 @@ class Reader {
         int cnt_ = 0;
 };
 
-void read_record(void *record, void *context) {
+void read_record(void *record, void *location, void *context) {
     TestUser *user = reinterpret_cast<TestUser *>(record);
     Reader *reader = reinterpret_cast<Reader *>(context);
     reader->read(user);

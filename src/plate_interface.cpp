@@ -4,20 +4,9 @@
 #include <string.h>
 #include "spdlog/spdlog.h"
 #include "plate.h"
-
-class User
-{
-public:
-    int64_t id;
-    char user_id[128];
-    char name[128];
-    int64_t salary;
-};
-
-enum Column{Id=0,Userid,Name,Salary};
+#include "user.h"
 
 Plate *plate_engine;
-
 
 class EngineReader {
   public:
@@ -78,7 +67,7 @@ void EngineReader::read(User *user) {
   }
 }
 
-void read_record(void *record, void *context) {
+void read_record(void *record, void *location, void *context) {
     User *user = reinterpret_cast<User *>(record);
     EngineReader *reader = reinterpret_cast<EngineReader *>(context);
     reader->read(user);

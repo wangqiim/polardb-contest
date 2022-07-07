@@ -119,16 +119,18 @@ int Plate::get(const Location &location, void * const datas) {
   return 0;
 }
 
-int Plate::scan(void (*cb)(void *, void *),  void *context) {
-  for (const auto &file: files_) {
-    Item *cursor = reinterpret_cast<Item *>(file.start_);
-    while (reinterpret_cast<char *>(cursor) < file.start_ + MAPSIZE) {
-      Item *internal_record = reinterpret_cast<Item *>(cursor);
+int Plate::scan(void (*cb)(void *user, void *location, void *context),  void *context) {
+  for (int file_id = 0; file_id < files_.size(); file_id++) {
+    int offset = 0;
+    while ((offset + 1) * sizeof(Item) <= MAPSIZE) {
+      char *data = files_[file_id].start_ + offset * sizeof(Item);
+      Item *internal_record = reinterpret_cast<Item *>(data);
       if (internal_record->in_use_ == 0) {
         break;
       }
-      cb(reinterpret_cast<void *>(cursor->datas_), context);
-      cursor++;
+      Location location(file_id, offset);
+      cb((void *)(internal_record->datas_), (void *)&location, context);
+      offset++;
     }
   }
   return 0;

@@ -8,12 +8,18 @@
 // uk : user_id 		//唯一索引
 // sk : salary			//普通索引
 
+using primary_key = std::unordered_map<int64_t, Location>;
+using unique_key  = std::unordered_map<std::string, Location>;
+using normal_key  = std::multimap<int64_t, Location>;
+
 class Engine {
   public:
     Engine(const char* disk_dir);
     ~Engine();
 
-    int Wppend(const void *datas);
+    int Init();
+
+    int Append(const void *datas);
 
     size_t Read(void *ctx, int32_t select_column,
       int32_t where_column, const void *column_key, 
@@ -25,7 +31,7 @@ class Engine {
     const char* dir_;
     Plate* plate_;
 
-    std::unordered_map<int64_t, Location>     idx_id_;
-    std::unordered_map<std::string, Location> idx_user_id_;
-    std::multimap<int64_t, Location>          idx_salary_;
+    primary_key idx_id_;
+    unique_key idx_user_id_;
+    normal_key idx_salary_;
 };
