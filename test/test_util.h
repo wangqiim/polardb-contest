@@ -10,13 +10,9 @@
 
 #include "const.h"
 
-bool FileExists(const std::string& path) {
-  return access(path.c_str(), F_OK) == 0;
-}
-
 int drop_datafile() {
     std::string path = disk_dir;
-    if (FileExists(path)) {
+    if (access(path.c_str(), F_OK) == 0) { // if file exist
         return remove(path.c_str());
     }
     return 0;
@@ -39,8 +35,7 @@ int rmtree(const char path[]) {
 
     // if not possible to read the directory for this user
     if ((dir = opendir(path)) == NULL) {
-        fprintf(stderr, "%s: %s\n", "Can`t open directory", path);
-        return -1;
+        return 0;
     }
 
     // the length of the path

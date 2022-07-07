@@ -2,6 +2,7 @@
 #include "plate.h"
 #include "interface.h"
 #include "test_util.h"
+#include "spdlog/spdlog.h"
 
 class TestUser
 {
@@ -120,13 +121,24 @@ TEST(InterfaceTest, BasicReplay) {
     EXPECT_EQ(3, read_cnt);
 
     engine_deinit(ctx);
-
+    // replay
     ctx = engine_init(nullptr, nullptr, 0, "/mnt/aep/", disk_dir);
     read_cnt = engine_read(ctx, Id, Salary, &user1.salary, 8, res);
     EXPECT_EQ(2, read_cnt);
 
     read_cnt = engine_read(ctx, Id, Name, &user2.name, 128, res);
     EXPECT_EQ(3, read_cnt);
+    
+    TestUser user5;
+    user5.id = 4;
+    memcpy(&user5.user_id, "user5", 5);
+    memcpy(&user5.name, "name2", 5);
+    user5.salary = 4;
+
+    engine_write(ctx,&user5,sizeof(user5));
+    read_cnt = engine_read(ctx, Id, Name, &user2.name, 128, res);
+    EXPECT_EQ(4, read_cnt);
+
     engine_deinit(ctx);
     EXPECT_EQ(0, rmtree(disk_dir));
 }
@@ -161,7 +173,6 @@ TEST(InterfaceTest, ManyWriteReplay) {
     // user1 user2 salary 相同
     // user2 user3 user4 name 相同
     TestUser user1;
-    user1.id = 1;
     memcpy(&user1.user_id, "user1", 5);
     memcpy(&user1.name, "name1", 5);
     user1.salary = 2;
@@ -170,6 +181,7 @@ TEST(InterfaceTest, ManyWriteReplay) {
 
     int write_cnt = MINIRECORDNUM * 2;
     for (int i = 0; i < write_cnt; i++) {
+        user1.id = i;
         engine_write(ctx, &user1, sizeof(user1));
     }
 
@@ -182,6 +194,11 @@ TEST(InterfaceTest, ManyWriteReplay) {
     ctx = engine_init(nullptr, nullptr, 0, "/mnt/aep/", disk_dir);
     read_cnt = engine_read(ctx, Id, Salary, &user1.salary, 8, res);
     EXPECT_EQ(write_cnt, read_cnt);
+
+    user1.id = 0;
+    engine_write(ctx, &user1, sizeof(user1));
+    read_cnt = engine_read(ctx, Id, Salary, &user1.salary, 8, res);
+    EXPECT_EQ(write_cnt + 1, read_cnt);
 
     engine_deinit(ctx);
     EXPECT_EQ(0, rmtree(disk_dir));
