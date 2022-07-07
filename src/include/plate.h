@@ -1,10 +1,17 @@
 #include <string>
-#include <mutex>
+#include <vector>
 
 const int RECORDSIZE = 8 + 128 + 128 + 8;
 const int RECORDNUM = 1000000 * 50; // about 13G think about 32bit overflow
 const int MINIRECORDNUM = 100000 * 50; // 1.3G
 const int MAPSIZE = RECORDSIZE * MINIRECORDNUM;
+
+class Location {
+  public:
+    Location(): file_id_(-1), offset_(-1) {}
+    int file_id_;
+    int offset_;
+};
 
 class MMapFile {
   public:
@@ -29,7 +36,9 @@ class Plate {
     
     int Init();
     
-    int append(const void *datas);
+    int append(const void *datas, Location &location);
+
+    int get(const Location &location, void *datas);
 
     int scan(void (*cb)(void *, void *),  void *context);
   
@@ -43,7 +52,6 @@ class Plate {
     void replay();
 
   private:
-    std::mutex mtx_;
 
     const std::string     dir_;      // data dictory
     std::vector<MMapFile> files_;    // mmap fd

@@ -90,7 +90,8 @@ void engine_write( void *ctx, const void *data, size_t len) {
     if (len != RECORDSIZE) {
       spdlog::error("engine_write len not equal to {:d}", RECORDSIZE);
     }
-    plate_engine->append(data);
+    Location loc;
+    plate_engine->append(data, loc);
  }
 
 size_t engine_read( void *ctx, int32_t select_column,

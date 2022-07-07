@@ -27,8 +27,7 @@ std::string DataFileName(const std::string &dir, const std::string &file_name) {
 }
 
 Plate::Plate(const std::string &path) 
-  : mtx_(),
-  dir_(path),
+  : dir_(path),
   files_(),
   currFile_(nullptr),
   curr_(nullptr) {}
@@ -44,7 +43,6 @@ Plate::~Plate() {
 }
 
 int Plate::Init() {
-  std::lock_guard<std::mutex> lock(mtx_);
   spdlog::info("plate start init");
   if (!FileExists(dir_) && 0 != mkdir(dir_.c_str(), 0755)) {
     return -1;
@@ -92,21 +90,36 @@ int Plate::Init() {
   return 0;
 }
 
-
-int Plate::append(const void *datas) {
-  std::lock_guard<std::mutex> lock(mtx_);
+int Plate::append(const void *datas, Location &location) {
   if (reinterpret_cast<char *>(curr_ + 1)> currFile_->start_ + MAPSIZE) {
     spdlog::info("plate currFile_ haven't space, create and mmap a new file");
     create_new_mmapFile();
   }
+  location.file_id_ = files_.size() - 1;
+  location.offset_ = ((char *)curr_ - currFile_->start_) / sizeof(Item);
   memcpy(curr_->datas_, datas, RECORDSIZE); // write data before write in_use flag
   reinterpret_cast<Item *>(curr_)->in_use_ = 1;
   curr_++;
   return 0;
 }
 
+int Plate::get(const Location &location, void *datas) {
+  // defend program
+  if (location.file_id_ >= files_.size() || (location.offset_ + 1) * sizeof(Item) > MAPSIZE) {
+    spdlog::error("invalid location");
+    return -1;
+  }
+  Item *internal_record = reinterpret_cast<Item *>(
+    files_[location.file_id_].start_ + sizeof(Item) * location.offset_);
+  if (internal_record->in_use_ == 0) {
+    spdlog::error("get a invalid record (not in use record)");
+    return -1;
+  }
+  datas = reinterpret_cast<void *>(internal_record->datas_);
+  return 0;
+}
+
 int Plate::scan(void (*cb)(void *, void *),  void *context) {
-  std::lock_guard<std::mutex> lock(mtx_);
   for (const auto &file: files_) {
     Item *cursor = reinterpret_cast<Item *>(file.start_);
     while (reinterpret_cast<char *>(cursor) < file.start_ + MAPSIZE) {
@@ -136,7 +149,6 @@ void Plate::replay() {
 }
 
 int Plate::size() {
-  std::lock_guard<std::mutex> lock(mtx_);
   if (files_.size() == 0) {
     return 0;
   }

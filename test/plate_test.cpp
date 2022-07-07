@@ -39,9 +39,12 @@ TEST(PlateTest, Basic) {
     user.salary = 100;
     memcpy(&user.name,"hello",5);
 
-    int ret = plate->append(reinterpret_cast<void *>(&user));
+    Location loc;
+    int ret = plate->append(reinterpret_cast<void *>(&user), loc);
     EXPECT_EQ(0, ret);
     EXPECT_EQ(1, plate->size());
+    EXPECT_EQ(0, loc.file_id_);
+    EXPECT_EQ(0, loc.offset_);
     
     char res[2000*128];
     Reader reader;
@@ -50,12 +53,14 @@ TEST(PlateTest, Basic) {
     EXPECT_EQ(0, ret);
     EXPECT_EQ(1, reader.get_cnt());
 
-    ret = plate->append(reinterpret_cast<void *>(&user));
+    ret = plate->append(reinterpret_cast<void *>(&user), loc);
     EXPECT_EQ(0, ret);
     reader.reset();
     ret = plate->scan(read_record, reinterpret_cast<void *>(&reader));
     EXPECT_EQ(0, ret);
     EXPECT_EQ(2, reader.get_cnt());
+    EXPECT_EQ(0, loc.file_id_);
+    EXPECT_EQ(1, loc.offset_);
     delete plate;
     EXPECT_EQ(0, rmtree(disk_dir));
 }
