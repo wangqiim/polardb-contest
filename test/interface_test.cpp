@@ -4,18 +4,6 @@
 #include "test_util.h"
 #include "spdlog/spdlog.h"
 
-class TestUser
-{
-public:
-    int64_t id = 0;
-    char user_id[128] = {0};
-    char name[128] = {0};
-    int64_t salary = 0;
-};
-
-enum TestColumn{Id=0,Userid,Name,Salary};
-
-
 TEST(InterfaceTest, Basic) {
     EXPECT_EQ(0, rmtree(disk_dir));
     TestUser user;

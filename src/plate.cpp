@@ -103,7 +103,7 @@ int Plate::append(const void *datas, Location &location) {
   return 0;
 }
 
-int Plate::get(const Location &location, void *datas) {
+int Plate::get(const Location &location, void * const datas) {
   // defend program
   if (location.file_id_ >= files_.size() || (location.offset_ + 1) * sizeof(Item) > MAPSIZE) {
     spdlog::error("invalid location");
@@ -115,7 +115,7 @@ int Plate::get(const Location &location, void *datas) {
     spdlog::error("get a invalid record (not in use record)");
     return -1;
   }
-  datas = reinterpret_cast<void *>(internal_record->datas_);
+  memcpy((char *)datas, internal_record->datas_, RECORDSIZE);
   return 0;
 }
 

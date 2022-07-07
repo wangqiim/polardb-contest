@@ -1,16 +1,7 @@
 #include <gtest/gtest.h>
 #include "plate.h"
 #include "test_util.h"
-
-class TestUser {
-    public:
-        int64_t id;
-        char user_id[128];
-        char name[128];
-        int64_t salary;
-};
-
-enum TestColumn{Id=0,Userid,Name,Salary};
+#include "spdlog/spdlog.h"
 
 class Reader {
     public:
@@ -37,6 +28,7 @@ TEST(PlateTest, Basic) {
     TestUser user;
     user.id = 0;
     user.salary = 100;
+    memcpy(&user.user_id,"12345",5);
     memcpy(&user.name,"hello",5);
 
     Location loc;
@@ -53,6 +45,14 @@ TEST(PlateTest, Basic) {
     EXPECT_EQ(0, ret);
     EXPECT_EQ(1, reader.get_cnt());
 
+    TestUser user_get;
+    ret = plate->get(loc, (void*)&user_get);
+    EXPECT_EQ(0, ret);
+    EXPECT_EQ(true, user_get == user);
+    spdlog::info("user: {}", user.to_string());
+    spdlog::info("user_get: {}", user_get.to_string());
+
+    user.id = 1;
     ret = plate->append(reinterpret_cast<void *>(&user), loc);
     EXPECT_EQ(0, ret);
     reader.reset();
@@ -61,6 +61,11 @@ TEST(PlateTest, Basic) {
     EXPECT_EQ(2, reader.get_cnt());
     EXPECT_EQ(0, loc.file_id_);
     EXPECT_EQ(1, loc.offset_);
+    ret = plate->get(loc, (void*)&user_get);
+    EXPECT_EQ(0, ret);
+    EXPECT_EQ(true, user_get == user);
+    spdlog::info("user: {}", user.to_string());
+    spdlog::info("user_get: {}", user_get.to_string());
     delete plate;
     EXPECT_EQ(0, rmtree(disk_dir));
 }

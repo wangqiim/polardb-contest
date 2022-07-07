@@ -38,7 +38,7 @@ class Plate {
     
     int append(const void *datas, Location &location);
 
-    int get(const Location &location, void *datas);
+    int get(const Location &location, void * const datas);
 
     int scan(void (*cb)(void *, void *),  void *context);
   
