@@ -27,7 +27,8 @@ std::string DataFileName(const std::string &dir, const std::string &file_name) {
 }
 
 Plate::Plate(const std::string &path) 
-  : dir_(path),
+  : mtx_(),
+  dir_(path),
   files_(),
   currFile_(nullptr),
   curr_(nullptr) {}
@@ -43,6 +44,7 @@ Plate::~Plate() {
 }
 
 int Plate::Init() {
+  std::lock_guard<std::mutex> lock(mtx_);
   spdlog::info("plate start init");
   if (!FileExists(dir_) && 0 != mkdir(dir_.c_str(), 0755)) {
     return -1;
@@ -92,6 +94,7 @@ int Plate::Init() {
 
 
 int Plate::append(const void *datas) {
+  std::lock_guard<std::mutex> lock(mtx_);
   if (reinterpret_cast<char *>(curr_ + 1)> currFile_->start_ + MAPSIZE) {
     spdlog::info("plate currFile_ haven't space, create and mmap a new file");
     create_new_mmapFile();
@@ -103,6 +106,7 @@ int Plate::append(const void *datas) {
 }
 
 int Plate::scan(void (*cb)(void *, void *),  void *context) {
+  std::lock_guard<std::mutex> lock(mtx_);
   for (const auto &file: files_) {
     Item *cursor = reinterpret_cast<Item *>(file.start_);
     while (reinterpret_cast<char *>(cursor) < file.start_ + MAPSIZE) {
@@ -132,6 +136,7 @@ void Plate::replay() {
 }
 
 int Plate::size() {
+  std::lock_guard<std::mutex> lock(mtx_);
   if (files_.size() == 0) {
     return 0;
   }

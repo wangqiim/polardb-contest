@@ -1,4 +1,5 @@
 #include <string>
+#include <mutex>
 
 const int RECORDSIZE = 8 + 128 + 128 + 8;
 const int RECORDNUM = 1000000 * 50; // about 13G think about 32bit overflow
@@ -42,6 +43,8 @@ class Plate {
     void replay();
 
   private:
+    std::mutex mtx_;
+
     const std::string     dir_;      // data dictory
     std::vector<MMapFile> files_;    // mmap fd
     MMapFile              *currFile_; // currFile_ = files_[files_.size() - 1]
