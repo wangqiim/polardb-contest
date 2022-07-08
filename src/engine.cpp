@@ -144,9 +144,9 @@ int Engine::Append(const void *datas) {
   const User *user = reinterpret_cast<const User *>(datas);
   // build pk index
   if (idx_id_.count(user->id) != 0) {
-    spdlog::error("insert dup id");
+    spdlog::error("insert dup id: {}", user->id);
   } else if (idx_user_id_.count(std::string(user->user_id, 128)) != 0) {
-    spdlog::error("insert dup user_id");
+    spdlog::error("insert dup user_id: {}", user->user_id);
   }
   idx_id_.insert({user->id, location});
   // build uk index

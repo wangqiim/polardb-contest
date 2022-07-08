@@ -13,7 +13,7 @@ TEST(InterfaceTest, Basic) {
     void* ctx = engine_init(nullptr, nullptr, 0, "/mnt/aep/", disk_dir);
     engine_write(ctx,&user,sizeof(user));
     char res[100*128];
-    size_t read_cnt = engine_read(ctx, Id, Name, &user.name, 8, res);
+    size_t read_cnt = engine_read(ctx, Id, Name, &user.name, 128, res);
 
     EXPECT_EQ(1, read_cnt);
     EXPECT_EQ(0, *(int64_t *)res);
@@ -52,7 +52,7 @@ TEST(InterfaceTest, ManyUser) {
 
     TestUser user5;
     user5.id = 5;
-    memcpy(&user5.user_id, "user4", 5);
+    memcpy(&user5.user_id, "user5", 5);
     memcpy(&user5.name, "name5", 5);
     user5.salary = 5;
 
@@ -131,7 +131,7 @@ TEST(InterfaceTest, BasicReplay) {
     EXPECT_EQ(3, read_cnt);
     
     TestUser user5;
-    user5.id = 4;
+    user5.id = 5;
     memcpy(&user5.user_id, "user5", 5);
     memcpy(&user5.name, "name2", 5);
     user5.salary = 4;
@@ -149,15 +149,15 @@ TEST(InterfaceTest, ManyWrite) {
     // user1 user2 salary 相同
     // user2 user3 user4 name 相同
     TestUser user1;
-    user1.id = 1;
-    memcpy(&user1.user_id, "user1", 5);
-    memcpy(&user1.name, "name1", 5);
+    memcpy(&user1.name, "name", 5);
     user1.salary = 2;
 
     void* ctx = engine_init(nullptr, nullptr, 0, "/mnt/aep/", disk_dir);
 
     int write_cnt = MINIRECORDNUM * 2;
     for (int i = 0; i < write_cnt; i++) {
+        user1.id = i;
+        snprintf(user1.user_id, sizeof(user1.user_id), "%d", i);
         engine_write(ctx, &user1, sizeof(user1));
     }
 
@@ -175,7 +175,6 @@ TEST(InterfaceTest, ManyWriteReplay) {
     // user1 user2 salary 相同
     // user2 user3 user4 name 相同
     TestUser user1;
-    memcpy(&user1.user_id, "user1", 5);
     memcpy(&user1.name, "name1", 5);
     user1.salary = 2;
 
@@ -184,6 +183,7 @@ TEST(InterfaceTest, ManyWriteReplay) {
     int write_cnt = MINIRECORDNUM * 2;
     for (int i = 0; i < write_cnt; i++) {
         user1.id = i;
+        snprintf(user1.user_id, sizeof(user1.user_id), "%d", i);
         engine_write(ctx, &user1, sizeof(user1));
     }
 
@@ -197,7 +197,8 @@ TEST(InterfaceTest, ManyWriteReplay) {
     read_cnt = engine_read(ctx, Id, Salary, &user1.salary, 8, res);
     EXPECT_EQ(write_cnt, read_cnt);
 
-    user1.id = 0;
+    user1.id = write_cnt + 1;
+    snprintf(user1.user_id, sizeof(user1.user_id), "%d", write_cnt + 1);
     engine_write(ctx, &user1, sizeof(user1));
     read_cnt = engine_read(ctx, Id, Salary, &user1.salary, 8, res);
     EXPECT_EQ(write_cnt + 1, read_cnt);
