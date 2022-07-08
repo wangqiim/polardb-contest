@@ -117,6 +117,7 @@ Engine::~Engine() {
 }
 
 int Engine::Init() {
+  std::lock_guard<std::mutex> lock(mtx_);
   int ret = plate_->Init();
   if (ret != 0) {
     spdlog::error("plate init fail");
@@ -132,6 +133,7 @@ int Engine::Init() {
 }
 
 int Engine::Append(const void *datas) {
+  std::lock_guard<std::mutex> lock(mtx_);
   Location location;
   plate_->append(datas, location);
   const User *user = reinterpret_cast<const User *>(datas);
@@ -147,7 +149,7 @@ int Engine::Append(const void *datas) {
 size_t Engine::Read(void *ctx, int32_t select_column,
     int32_t where_column, const void *column_key, 
     size_t column_key_len, void *res) {
-  
+  std::lock_guard<std::mutex> lock(mtx_);
   User user;
   size_t res_num = 0;
   switch(where_column) {

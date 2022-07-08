@@ -148,12 +148,13 @@ TEST(InterfaceTest, ManyWrite) {
         engine_write(ctx, &user1, sizeof(user1));
     }
 
-    char res[write_cnt * 128];
+    char *res = new char[write_cnt * 128];
     size_t read_cnt = engine_read(ctx, Id, Salary, &user1.salary, 8, res);
     EXPECT_EQ(write_cnt, read_cnt);
 
     engine_deinit(ctx);
     EXPECT_EQ(0, rmtree(disk_dir));
+    delete[] res;
 }
 
 TEST(InterfaceTest, ManyWriteReplay) {
@@ -173,7 +174,7 @@ TEST(InterfaceTest, ManyWriteReplay) {
         engine_write(ctx, &user1, sizeof(user1));
     }
 
-    char res[write_cnt * 128];
+    char *res = new char[write_cnt * 128];
     size_t read_cnt = engine_read(ctx, Id, Salary, &user1.salary, 8, res);
     EXPECT_EQ(write_cnt, read_cnt);
 
@@ -191,4 +192,5 @@ TEST(InterfaceTest, ManyWriteReplay) {
     engine_deinit(ctx);
     EXPECT_EQ(0, rmtree(disk_dir));
     EXPECT_EQ(0, rmtree(disk_dir));
+    delete res;
 }
