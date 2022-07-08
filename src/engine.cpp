@@ -143,6 +143,11 @@ int Engine::Append(const void *datas) {
   plate_->append(datas, location);
   const User *user = reinterpret_cast<const User *>(datas);
   // build pk index
+  if (idx_id_.count(user->id) != 0) {
+    spdlog::error("insert dup id");
+  } else if (idx_user_id_.count(std::string(user->user_id, 128)) != 0) {
+    spdlog::error("insert dup user_id");
+  }
   idx_id_.insert({user->id, location});
   // build uk index
   idx_user_id_.insert({std::string(user->user_id, sizeof(user->user_id)), location}); // must use string(char* s, size_t n) construct funciton
