@@ -167,7 +167,10 @@ size_t Engine::Read(void *ctx, int32_t select_column,
       break;
 
       case Userid: {
-        std::string user_id((char *)column_key, column_key_len);
+        if (column_key_len != 128) {
+          spdlog::error("read column_key_len is: {}, expcted: 128");
+        }
+        std::string user_id((char *)column_key, column_key_len); // todo: column_key_len is 128???
         auto iter = idx_user_id_.find(user_id);
         if (iter != idx_user_id_.end()) {
           res_num = 1;

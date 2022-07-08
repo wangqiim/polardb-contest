@@ -217,12 +217,22 @@ TEST(InterfaceTest, ReadUserIdReplay) {
     memcpy(&user1.name, "name1", 5);
     user1.salary = 1;
 
+    TestUser user2;
+    user2.id = 2;
+    memcpy(&user2.user_id, "user2", 5);
+    user2.user_id[10] = '_';
+    memcpy(&user2.name, "name2", 5);
+    user2.salary = 2;
+
     void* ctx = engine_init(nullptr, nullptr, 0, "/mnt/aep/", disk_dir);
 
     engine_write(ctx, &user1, sizeof(user1));
+    engine_write(ctx, &user2, sizeof(user1));
 
     char *res = new char[10 * 128];
     size_t read_cnt = engine_read(ctx, Id, Userid, &user1.user_id, 128, res);
+    EXPECT_EQ(1, read_cnt);
+    read_cnt = engine_read(ctx, Id, Userid, &user2.user_id, 128, res);
     EXPECT_EQ(1, read_cnt);
 
     engine_deinit(ctx);
@@ -232,6 +242,9 @@ TEST(InterfaceTest, ReadUserIdReplay) {
     
     read_cnt = engine_read(ctx, Id, Userid, &user1.user_id, 128, res);
     EXPECT_EQ(1, read_cnt);
+    read_cnt = engine_read(ctx, Id, Userid, &user2.user_id, 128, res);
+    EXPECT_EQ(1, read_cnt);
+
 
     engine_deinit(ctx);
     EXPECT_EQ(0, rmtree(disk_dir));
