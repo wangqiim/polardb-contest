@@ -136,6 +136,9 @@ int Engine::Init() {
 
 int Engine::Append(const void *datas) {
   std::lock_guard<std::mutex> lock(mtx_);
+  if ((++write_cnt_) % 1 == 0) {
+    spdlog::info("[wangqiim] write {}", ((User *)datas)->to_string());
+  }
   Location location;
   plate_->append(datas, location);
   const User *user = reinterpret_cast<const User *>(datas);
@@ -156,11 +159,11 @@ size_t Engine::Read(void *ctx, int32_t select_column,
   size_t res_num = 0;
   switch(where_column) {
       case Id: {
-        if ((++cnt1_) % 5 == 0) {
+        if ((++cnt1_) % 1 == 0) {
           spdlog::info("[wangqiim] read select_column[{}], where_column[Id]", select_column);
         }
         if (column_key_len != 8) {
-          spdlog::error("read column_key_len is: {}, expcted: 128");
+          spdlog::error("read column_key_len is: {}, expcted: 8", column_key_len);
         }
         int64_t id = *((int64_t *)column_key);
         auto iter = idx_id_.find(id);
@@ -173,11 +176,11 @@ size_t Engine::Read(void *ctx, int32_t select_column,
       break;
 
       case Userid: {
-        if ((++cnt2_) % 5 == 0) {
+        if ((++cnt2_) % 1 == 0) {
           spdlog::info("[wangqiim] read select_column[{}], where_column[Userid]", select_column);
         }
         if (column_key_len != 128) {
-          spdlog::error("read column_key_len is: {}, expcted: 128");
+          spdlog::error("read column_key_len is: {}, expcted: 128", column_key_len);
         }
         std::string user_id((char *)column_key, column_key_len); // todo: column_key_len is 128???
         auto iter = idx_user_id_.find(user_id);
@@ -190,12 +193,12 @@ size_t Engine::Read(void *ctx, int32_t select_column,
       break;
 
       case Name: {
-        if ((++cnt3_) % 5 == 0) {
+        if ((++cnt3_) % 1 == 0) {
           spdlog::info("[wangqiim] read select_column[{}], where_column[Name]", select_column);
         }
         spdlog::info("select where Name is very slow (without index)");
         if (column_key_len != 128) {
-          spdlog::error("read column_key_len is: {}, expcted: 128");
+          spdlog::error("read column_key_len is: {}, expcted: 128", column_key_len);
         }
         EngineReader reader(select_column, where_column, column_key, column_key_len, res);
         plate_->scan(read_record, reinterpret_cast<void *>(&reader));
@@ -204,11 +207,11 @@ size_t Engine::Read(void *ctx, int32_t select_column,
       break;
 
       case Salary: {
-        if ((++cnt4_) % 5 == 0) {
+        if ((++cnt4_) % 1 == 0) {
           spdlog::info("[wangqiim] read select_column[{}], where_column[Salary]", select_column);
         }
         if (column_key_len != 8) {
-          spdlog::error("read column_key_len is: {}, expcted: 128");
+          spdlog::error("read column_key_len is: {}, expcted: 8", column_key_len);
         }
         int64_t salary = *((int64_t *)column_key);
         auto range = idx_salary_.equal_range(salary);

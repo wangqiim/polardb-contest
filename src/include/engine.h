@@ -36,6 +36,8 @@ class Engine {
     normal_key idx_salary_;
     
     // debug log
+    int write_cnt_ = 0;
+
     int cnt1_ = 0;
     int cnt2_ = 0;
     int cnt3_ = 0;
