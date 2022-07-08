@@ -156,7 +156,7 @@ size_t Engine::Read(void *ctx, int32_t select_column,
   size_t res_num = 0;
   switch(where_column) {
       case Id: {
-        if ((++cnt1_) % 100 == 0) {
+        if ((++cnt1_) % 5 == 0) {
           spdlog::info("[wangqiim] read select_column[{}], where_column[Id]", select_column);
         }
         if (column_key_len != 8) {
@@ -173,7 +173,7 @@ size_t Engine::Read(void *ctx, int32_t select_column,
       break;
 
       case Userid: {
-        if ((++cnt2_) % 100 == 0) {
+        if ((++cnt2_) % 5 == 0) {
           spdlog::info("[wangqiim] read select_column[{}], where_column[Userid]", select_column);
         }
         if (column_key_len != 128) {
@@ -190,7 +190,7 @@ size_t Engine::Read(void *ctx, int32_t select_column,
       break;
 
       case Name: {
-        if ((++cnt3_) % 100 == 0) {
+        if ((++cnt3_) % 5 == 0) {
           spdlog::info("[wangqiim] read select_column[{}], where_column[Name]", select_column);
         }
         spdlog::info("select where Name is very slow (without index)");
@@ -204,7 +204,7 @@ size_t Engine::Read(void *ctx, int32_t select_column,
       break;
 
       case Salary: {
-        if ((++cnt4_) % 100 == 0) {
+        if ((++cnt4_) % 5 == 0) {
           spdlog::info("[wangqiim] read select_column[{}], where_column[Salary]", select_column);
         }
         if (column_key_len != 8) {
