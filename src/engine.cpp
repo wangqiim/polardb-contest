@@ -164,9 +164,6 @@ size_t Engine::Read(void *ctx, int32_t select_column,
   size_t res_num = 0;
   switch(where_column) {
       case Id: {
-        if ((++cnt1_) % 1 == 0) {
-          spdlog::info("[wangqiim] read select_column[{}], where_column[Id]", select_column);
-        }
         if (column_key_len != 8) {
           spdlog::error("read column_key_len is: {}, expcted: 8", column_key_len);
         }
@@ -177,13 +174,13 @@ size_t Engine::Read(void *ctx, int32_t select_column,
           plate_->get(iter->second, &user);
           add_res(user, select_column, &res);
         }
+        if ((++cnt1_) % 1 == 0) {
+          spdlog::debug("[wangqiim] read select_column[{}], where_column[Id], user[{}]", select_column, user.to_string());
+        }
       }
       break;
 
       case Userid: {
-        if ((++cnt2_) % 1 == 0) {
-          spdlog::info("[wangqiim] read select_column[{}], where_column[Userid]", select_column);
-        }
         if (column_key_len != 128) {
           spdlog::error("read column_key_len is: {}, expcted: 128", column_key_len);
         }
@@ -191,15 +188,18 @@ size_t Engine::Read(void *ctx, int32_t select_column,
         auto iter = idx_user_id_.find(user_id);
         if (iter != idx_user_id_.end()) {
           res_num = 1;
-          plate_->get(iter->second, res);
+          plate_->get(iter->second, &user);
           add_res(user, select_column, &res);
+        }
+        if ((++cnt2_) % 1 == 0) {
+          spdlog::debug("[wangqiim] read select_column[{}], where_column[Userid], user[{}]", select_column, user.to_string());
         }
       } 
       break;
 
       case Name: {
         if ((++cnt3_) % 1 == 0) {
-          spdlog::info("[wangqiim] read select_column[{}], where_column[Name]", select_column);
+          spdlog::debug("[wangqiim] read select_column[{}], where_column[Name]", select_column);
         }
         spdlog::info("select where Name is very slow (without index)");
         if (column_key_len != 128) {
@@ -213,7 +213,7 @@ size_t Engine::Read(void *ctx, int32_t select_column,
 
       case Salary: {
         if ((++cnt4_) % 1 == 0) {
-          spdlog::info("[wangqiim] read select_column[{}], where_column[Salary]", select_column);
+          spdlog::debug("[wangqiim] read select_column[{}], where_column[Salary]", select_column);
         }
         if (column_key_len != 8) {
           spdlog::error("read column_key_len is: {}, expcted: 8", column_key_len);

@@ -242,8 +242,13 @@ TEST(InterfaceTest, ReadUserIdReplay) {
     
     read_cnt = engine_read(ctx, Id, Userid, &user1.user_id, 128, res);
     EXPECT_EQ(1, read_cnt);
+    EXPECT_EQ(0, memcmp(res, (char *)&(user1.id), 8));
     read_cnt = engine_read(ctx, Id, Userid, &user2.user_id, 128, res);
     EXPECT_EQ(1, read_cnt);
+    EXPECT_EQ(0, memcmp(res, (char *)&(user2.id), 8));
+
+    read_cnt = engine_read(ctx, Id, Userid, "abc", 128, res);
+    EXPECT_EQ(0, read_cnt);
 
 
     engine_deinit(ctx);
