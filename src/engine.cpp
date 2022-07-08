@@ -46,7 +46,7 @@ void Index_Builder::build(User *user, Location *location) {
   // build pk index
   idx_id_->insert({user->id, Location(location->file_id_, location->offset_)});
   // build uk index
-  idx_user_id_->insert({user->user_id, Location(location->file_id_, location->offset_)});
+  idx_user_id_->insert({std::string(user->user_id, sizeof(user->user_id)), Location(location->file_id_, location->offset_)});
   // build nk index
   idx_salary_->insert({user->salary, Location(location->file_id_, location->offset_)});
 }

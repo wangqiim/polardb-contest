@@ -204,6 +204,36 @@ TEST(InterfaceTest, ManyWriteReplay) {
 
     engine_deinit(ctx);
     EXPECT_EQ(0, rmtree(disk_dir));
+    delete res;
+}
+
+TEST(InterfaceTest, ReadUserIdReplay) {
+    EXPECT_EQ(0, rmtree(disk_dir));
+    // user1 user2 salary 相同
+    // user2 user3 user4 name 相同
+    TestUser user1;
+    user1.id = 1;
+    memcpy(&user1.user_id, "user1", 5);
+    memcpy(&user1.name, "name1", 5);
+    user1.salary = 1;
+
+    void* ctx = engine_init(nullptr, nullptr, 0, "/mnt/aep/", disk_dir);
+
+    engine_write(ctx, &user1, sizeof(user1));
+
+    char *res = new char[10 * 128];
+    size_t read_cnt = engine_read(ctx, Id, Userid, &user1.user_id, 128, res);
+    EXPECT_EQ(1, read_cnt);
+
+    engine_deinit(ctx);
+
+    // replay
+    ctx = engine_init(nullptr, nullptr, 0, "/mnt/aep/", disk_dir);
+    
+    read_cnt = engine_read(ctx, Id, Userid, &user1.user_id, 128, res);
+    EXPECT_EQ(1, read_cnt);
+
+    engine_deinit(ctx);
     EXPECT_EQ(0, rmtree(disk_dir));
     delete res;
 }
