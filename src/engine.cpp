@@ -156,6 +156,12 @@ size_t Engine::Read(void *ctx, int32_t select_column,
   size_t res_num = 0;
   switch(where_column) {
       case Id: {
+        if ((++cnt1_) % 100 == 0) {
+          spdlog::info("[wangqiim] read select_column[{}], where_column[Id]", select_column);
+        }
+        if (column_key_len != 8) {
+          spdlog::error("read column_key_len is: {}, expcted: 128");
+        }
         int64_t id = *((int64_t *)column_key);
         auto iter = idx_id_.find(id);
         if (iter != idx_id_.end()) {
@@ -167,6 +173,9 @@ size_t Engine::Read(void *ctx, int32_t select_column,
       break;
 
       case Userid: {
+        if ((++cnt2_) % 100 == 0) {
+          spdlog::info("[wangqiim] read select_column[{}], where_column[Userid]", select_column);
+        }
         if (column_key_len != 128) {
           spdlog::error("read column_key_len is: {}, expcted: 128");
         }
@@ -181,6 +190,13 @@ size_t Engine::Read(void *ctx, int32_t select_column,
       break;
 
       case Name: {
+        if ((++cnt3_) % 100 == 0) {
+          spdlog::info("[wangqiim] read select_column[{}], where_column[Name]", select_column);
+        }
+        spdlog::info("select where Name is very slow (without index)");
+        if (column_key_len != 128) {
+          spdlog::error("read column_key_len is: {}, expcted: 128");
+        }
         EngineReader reader(select_column, where_column, column_key, column_key_len, res);
         plate_->scan(read_record, reinterpret_cast<void *>(&reader));
         res_num = reader.get_cnt();
@@ -188,6 +204,12 @@ size_t Engine::Read(void *ctx, int32_t select_column,
       break;
 
       case Salary: {
+        if ((++cnt4_) % 100 == 0) {
+          spdlog::info("[wangqiim] read select_column[{}], where_column[Salary]", select_column);
+        }
+        if (column_key_len != 8) {
+          spdlog::error("read column_key_len is: {}, expcted: 128");
+        }
         int64_t salary = *((int64_t *)column_key);
         auto range = idx_salary_.equal_range(salary);
         auto iter = range.first;

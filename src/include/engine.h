@@ -34,4 +34,10 @@ class Engine {
     primary_key idx_id_;
     unique_key idx_user_id_;
     normal_key idx_salary_;
+    
+    // debug log
+    int cnt1_ = 0;
+    int cnt2_ = 0;
+    int cnt3_ = 0;
+    int cnt4_ = 0;
 };
