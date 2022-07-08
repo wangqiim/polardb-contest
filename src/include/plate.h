@@ -4,7 +4,7 @@
 const int RECORDSIZE = 8 + 128 + 128 + 8;
 const int RECORDNUM = 1000000 * 50; // about 13G think about 32bit overflow
 const int MINIRECORDNUM = 100000 * 50; // 1.3G
-const int MAPSIZE = RECORDSIZE * MINIRECORDNUM;
+const int MAPSIZE = (RECORDSIZE + 8) * MINIRECORDNUM; // uint64_t Item: int_use_
 
 class Location {
   public:

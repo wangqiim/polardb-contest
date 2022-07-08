@@ -118,6 +118,7 @@ Engine::~Engine() {
 
 int Engine::Init() {
   std::lock_guard<std::mutex> lock(mtx_);
+  spdlog::info("engine start init");
   int ret = plate_->Init();
   if (ret != 0) {
     spdlog::error("plate init fail");
@@ -129,6 +130,7 @@ int Engine::Init() {
     spdlog::error("plate scan fail");
     return -1;
   }
+  spdlog::info("engine init done");
   return 0;
 }
 
@@ -140,7 +142,7 @@ int Engine::Append(const void *datas) {
   // build pk index
   idx_id_.insert({user->id, location});
   // build uk index
-  idx_user_id_.insert({user->user_id, location});
+  idx_user_id_.insert({std::string(user->user_id, sizeof(user->user_id)), location}); // must use string(char* s, size_t n) construct funciton
   // build nk index
   idx_salary_.insert({user->salary, location});
   return 0;

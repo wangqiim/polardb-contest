@@ -50,12 +50,19 @@ TEST(InterfaceTest, ManyUser) {
     memcpy(&user4.name, "name2", 5);
     user4.salary = 4;
 
+    TestUser user5;
+    user5.id = 5;
+    memcpy(&user5.user_id, "user4", 5);
+    memcpy(&user5.name, "name5", 5);
+    user5.salary = 5;
+
     void* ctx = engine_init(nullptr, nullptr, 0, "/mnt/aep/", disk_dir);
 
     engine_write(ctx,&user1,sizeof(user1));
     engine_write(ctx,&user2,sizeof(user2));
     engine_write(ctx,&user3,sizeof(user3));
     engine_write(ctx,&user4,sizeof(user4));
+    engine_write(ctx,&user5,sizeof(user5));
 
     char res[100*128];
     size_t read_cnt = engine_read(ctx, Id, Salary, &user1.salary, 8, res);
@@ -63,6 +70,12 @@ TEST(InterfaceTest, ManyUser) {
 
     read_cnt = engine_read(ctx, Id, Name, &user2.name, 128, res);
     EXPECT_EQ(3, read_cnt);
+
+    read_cnt = engine_read(ctx, Id, Userid, &user4.user_id, 128, res);
+    EXPECT_EQ(1, read_cnt);
+
+    read_cnt = engine_read(ctx, Id, Id, &user5.id, 8, res);
+    EXPECT_EQ(1, read_cnt);
 
     engine_deinit(ctx);
     EXPECT_EQ(0, rmtree(disk_dir));
