@@ -19,7 +19,7 @@ add_library(interface
 SHARED
         src/plate_interface.cpp
 )
-target_link_libraries(interface plate)
+target_link_libraries(interface engine)
 
 # src
 add_subdirectory(src)

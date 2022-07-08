@@ -145,9 +145,8 @@ int Engine::Append(const void *datas) {
 }
 
 size_t Engine::Read(void *ctx, int32_t select_column,
-  int32_t where_column, const void *column_key, 
-  size_t column_key_len, void *res) {
-  spdlog::error("implement me");
+    int32_t where_column, const void *column_key, 
+    size_t column_key_len, void *res) {
   
   User user;
   size_t res_num = 0;
@@ -189,6 +188,7 @@ size_t Engine::Read(void *ctx, int32_t select_column,
           res_num += 1;
           plate_->get(iter->second, &user);
           add_res(user, select_column, &res);
+          iter++;
         }
       }
       break;

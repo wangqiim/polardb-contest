@@ -12,7 +12,7 @@ TEST(InterfaceTest, Basic) {
     memcpy(&user.name,"hello",5);
     void* ctx = engine_init(nullptr, nullptr, 0, "/mnt/aep/", disk_dir);
     engine_write(ctx,&user,sizeof(user));
-    char res[2000*128];
+    char res[100*128];
     size_t read_cnt = engine_read(ctx, Id, Name, &user.name, 8, res);
 
     EXPECT_EQ(1, read_cnt);
@@ -57,7 +57,7 @@ TEST(InterfaceTest, ManyUser) {
     engine_write(ctx,&user3,sizeof(user3));
     engine_write(ctx,&user4,sizeof(user4));
 
-    char res[2000*128];
+    char res[100*128];
     size_t read_cnt = engine_read(ctx, Id, Salary, &user1.salary, 8, res);
     EXPECT_EQ(2, read_cnt);
 
@@ -101,7 +101,7 @@ TEST(InterfaceTest, BasicReplay) {
     engine_write(ctx,&user3,sizeof(user3));
     engine_write(ctx,&user4,sizeof(user4));
 
-    char res[2000*128];
+    char res[100*128];
     size_t read_cnt = engine_read(ctx, Id, Salary, &user1.salary, 8, res);
     EXPECT_EQ(2, read_cnt);
 
