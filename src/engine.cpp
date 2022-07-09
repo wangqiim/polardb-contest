@@ -46,12 +46,12 @@ class Index_Builder {
 
 void Index_Builder::build(User *user, Location *location) {
   // build pk index
-  idx_id_[user->id % len]->insert({user->id, *user});
+  idx_id_[((uint32_t)user->id) % len]->insert({user->id, *user});
   // build uk index
   size_t hid = StrHash(user->user_id, sizeof(user->user_id));
   idx_user_id_[hid % len]->insert({std::string(user->user_id, sizeof(user->user_id)), user->id});
   // build nk index
-  idx_salary_[user->salary % len]->insert({user->salary,user->id});
+  idx_salary_[((uint32_t)user->salary) % len]->insert({user->salary,user->id});
 }
 
 void build_index(void *record, void *location, void *context) {
@@ -155,9 +155,9 @@ int Engine::Append(const void *datas) {
   // mtx_.unlock();
   const User *user = reinterpret_cast<const User *>(datas);
   // build pk index
-  uint32_t id1 = (user->id) % 8;
+  uint32_t id1 = ((uint32_t)user->id) % 8;
   uint32_t id2 = (StrHash(user->user_id, sizeof(user->user_id))) % 8;
-  uint32_t id3 = (user->salary) % 8;
+  uint32_t id3 = ((uint32_t)user->salary) % 8;
 
   //  if (idx_id_list_[hid]->count(user->id) != 0) {
 //    spdlog::error("insert dup id: {}", user->id);
@@ -193,7 +193,7 @@ size_t Engine::Read(void *ctx, int32_t select_column,
           spdlog::error("read column_key_len is: {}, expcted: 8", column_key_len);
         }
         int64_t id = *((int64_t *)column_key);
-        uint32_t id1 = id % 8;
+        uint32_t id1 = ((uint32_t)id) % 8;
         idx_id_mtx_list_[id1].lock();
         auto iter = idx_id_list_[id1]->find(id);
         if (iter != idx_id_list_[id1]->end()) {
@@ -221,7 +221,7 @@ size_t Engine::Read(void *ctx, int32_t select_column,
           res_num = 1;
           int64_t id = iter->second;
 
-          uint32_t id1 = id % 8;
+          uint32_t id1 = ((uint32_t)id) % 8;
           idx_id_mtx_list_[id1].lock();
           user = idx_id_list_[id1]->find(id)->second;
           idx_id_mtx_list_[id1].unlock();
@@ -257,14 +257,14 @@ size_t Engine::Read(void *ctx, int32_t select_column,
           spdlog::error("read column_key_len is: {}, expcted: 8", column_key_len);
         }
 
-        uint32_t id3 = salary % 8;
+        uint32_t id3 = ((uint32_t)salary) % 8;
         idx_salary_mtx_list_[id3].lock();
         auto range = idx_salary_list_[id3]->equal_range(salary);
         auto iter = range.first;
         while (iter != range.second) {
           res_num += 1;
           int64_t id = iter->second;
-          uint32_t id1 = id % 8;
+          uint32_t id1 = ((uint32_t)id) % 8;
           idx_id_mtx_list_[id1].lock();
           user = idx_id_list_[id1]->find(id)->second;
           idx_id_mtx_list_[id1].unlock();

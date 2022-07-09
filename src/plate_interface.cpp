@@ -7,11 +7,9 @@
 Engine *engine;
 
 void engine_write( void *ctx, const void *data, size_t len) {
-    User user;
     if (len != RECORDSIZE) {
         spdlog::error("engine_write len != {}", RECORDSIZE);
     }
-    memcpy(&user,data,len); // todo: dead code
     if (len != RECORDSIZE) {
       spdlog::error("engine_write len not equal to {:d}", RECORDSIZE);
     }
@@ -26,8 +24,8 @@ size_t engine_read( void *ctx, int32_t select_column,
 
 void* engine_init(const char* host_info, const char* const* peer_host_info, size_t peer_host_info_num,
                   const char* aep_dir, const char* disk_dir) {
-    spdlog::set_level(spdlog::level::debug);
-    spdlog::info("[plate engine_init version[read before lock]");
+    spdlog::set_level(spdlog::level::info);
+    spdlog::info("[plate engine_init version[negtive mod]");
     engine = new Engine(disk_dir);
     engine->Init();
     return nullptr;

@@ -30,13 +30,13 @@ void ReadAfterWriteHelper(void *ctx, int writeNumPerThread,
 
     char *res = new char[writeNumPerThread * 128];
     size_t read_cnt = 0;
-    int start = writeNumPerThread * thread_itr; // different thread write different key
-    int end = writeNumPerThread * (thread_itr + 1);
+    int64_t start = writeNumPerThread * thread_itr; // different thread write different key
+    int64_t end = writeNumPerThread * (thread_itr + 1);
     // spdlog::info("[Thread: {}], start = {}, end = {}", thread_itr, start, end);
-    for (int i = start; i < end; i++) {
+    for (int64_t i = start; i < end; i++) {
       user.id = i;
-      snprintf(user.user_id, sizeof(user.user_id), "%d", i);
-      user.salary = start;
+      snprintf(user.user_id, sizeof(user.user_id), "%lld", (long long)i);
+      user.salary = -start; // negtive!
       engine_write(ctx, &user, sizeof(user));
 
       read_cnt = engine_read(ctx, Id, Userid, &user.user_id, 128, res);
