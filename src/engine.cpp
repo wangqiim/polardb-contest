@@ -219,9 +219,9 @@ size_t Engine::Read(void *ctx, int32_t select_column,
           int64_t id = iter->second;
 
           uint32_t id1 = id % 8;
-          idx_user_id_mtx_list_[id1].lock();
+          idx_id_mtx_list_[id1].lock();
           user = idx_id_list_[id1]->find(id)->second;
-          idx_user_id_mtx_list_[id1].unlock();
+          idx_id_mtx_list_[id1].unlock();
           add_res(user, select_column, &res);
         }
         if ((++cnt2_) % 1 == 0) {
@@ -262,9 +262,9 @@ size_t Engine::Read(void *ctx, int32_t select_column,
           res_num += 1;
           int64_t id = iter->second;
           uint32_t id1 = id % 8;
-          idx_user_id_mtx_list_[id1].lock();
+          idx_id_mtx_list_[id1].lock();
           user = idx_id_list_[id1]->find(id)->second;
-          idx_user_id_mtx_list_[id1].unlock();
+          idx_id_mtx_list_[id1].unlock();
           add_res(user, select_column, &res);
           iter++;
         }
