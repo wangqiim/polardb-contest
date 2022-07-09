@@ -116,6 +116,11 @@ Engine::Engine(const char* disk_dir)
     idx_id_list_(), idx_user_id_list_(), idx_salary_list_() {}
 
 Engine::~Engine() {
+  for(size_t i = 0; i < 8; i++) {
+    delete idx_id_list_[i];
+    delete idx_user_id_list_[i];
+    delete idx_salary_list_[i];
+  }
   delete plate_;
 }
 

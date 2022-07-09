@@ -16,10 +16,12 @@ class Location {
 
 class MMapFile {
   public:
-    MMapFile(): fd_(-1), start_(nullptr) {}
-    MMapFile(int fd, char *start): fd_(fd), start_(start) {}
+    MMapFile(): path_(), fd_(-1), start_(nullptr) {}
+    MMapFile(std::string path, int fd, char *start): path_(path), fd_(fd), start_(start) {}
+    bool is_open() { return fd_ != -1; }
+    std::string path_;
     int  fd_;
-    char *start_;
+    char *start_; // if start_ = nullptr, this file is close and unmmap
 };
 
 class Item {
@@ -49,8 +51,11 @@ class Plate {
     int gen_sorted_paths(const std::string &dir, std::vector<std::string> &paths);
     // current spapce is run out, create a new file
     int create_new_mmapFile();
-    // update curr_
+    // update curr_ (only open the last mmap file)
     void replay();
+    //open or close mmap a file through MMapFile object
+    int openMMapFileIfNotOpen(MMapFile &file);
+    int closeMMapFile(MMapFile &file);
 
   private:
 

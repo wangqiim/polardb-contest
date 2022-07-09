@@ -34,10 +34,9 @@ Plate::Plate(const std::string &path)
 
 Plate::~Plate() {
   spdlog::info("plate start deconstruct");
-  for (const auto &mmapFile: files_) {
-    if (mmapFile.fd_ > 0) {
-      munmap(mmapFile.start_, MAPSIZE);
-      close(mmapFile.fd_);
+  for (auto &mmapFile: files_) {
+    if (mmapFile.is_open()) {
+      closeMMapFile(mmapFile);
     }
   }
 }
@@ -55,38 +54,10 @@ int Plate::Init() {
   }
 
   for (int i = 0; i < paths.size(); i++) {
-    bool new_create = false;
-    // open data file  
-    int fd = open(paths[i].c_str(), O_RDWR, 0644);
-    if (fd < 0 && errno == ENOENT) {
-      fd = open(paths[i].c_str(), O_RDWR | O_CREAT, 0644);
-      if (fd >= 0) {
-        new_create = true;
-        if (posix_fallocate(fd, 0, MAPSIZE) != 0) {
-          spdlog::error("posix_fallocate failed");
-          close(fd);
-          return -1;
-        }
-      }
-    }
-    if (fd < 0) {
-      return -1;
-    }
-    // mmap data file
-    void* ptr = mmap(NULL, MAPSIZE, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
-    if (ptr == MAP_FAILED) {
-      spdlog::error("MAP_FAILED");
-      close(fd);
-      return -1;
-    }
-    MMapFile file(fd, reinterpret_cast<char *>(ptr));
+    MMapFile file(paths[i], -1, nullptr);
     files_.push_back(file);
-    if (new_create) {
-      memset(ptr, 0, MAPSIZE);
-      curr_ = reinterpret_cast<Item *>(ptr);
-    }
   }
-  replay();
+  replay(); // only open the last mmap file
   return 0;
 }
 
@@ -109,6 +80,7 @@ int Plate::get(const Location &location, void * const datas) {
     spdlog::error("invalid location");
     return -1;
   }
+  openMMapFileIfNotOpen(files_[location.file_id_]);
   Item *internal_record = reinterpret_cast<Item *>(
     files_[location.file_id_].start_ + sizeof(Item) * location.offset_);
   if (internal_record->in_use_ == 0) {
@@ -116,11 +88,18 @@ int Plate::get(const Location &location, void * const datas) {
     return -1;
   }
   memcpy((char *)datas, internal_record->datas_, RECORDSIZE);
+  if (location.file_id_ + 1 != files_.size()) { // if it is not the last mmap file, close it
+    closeMMapFile(files_[location.file_id_]);
+  }
   return 0;
 }
 
 int Plate::scan(void (*cb)(void *user, void *location, void *context),  void *context) {
   for (int file_id = 0; file_id < files_.size(); file_id++) {
+    if (file_id != 0) {
+      closeMMapFile(files_[file_id - 1]);
+    }
+    openMMapFileIfNotOpen(files_[file_id]);
     int offset = 0;
     while ((offset + 1) * sizeof(Item) <= MAPSIZE) {
       char *data = files_[file_id].start_ + offset * sizeof(Item);
@@ -137,8 +116,8 @@ int Plate::scan(void (*cb)(void *user, void *location, void *context),  void *co
 }
 
 void Plate::replay() {
-  spdlog::info("plate start replay");
   currFile_ = &files_.back();
+  openMMapFileIfNotOpen(*currFile_);
   Item *cursor = reinterpret_cast<Item *>(currFile_->start_);
   while (reinterpret_cast<char *>(cursor) < currFile_->start_ + MAPSIZE) {
     Item *internal_record = reinterpret_cast<Item *>(cursor);
@@ -153,6 +132,10 @@ void Plate::replay() {
 int Plate::size() {
   if (files_.size() == 0) {
     return 0;
+  }
+  if (currFile_ == nullptr || !currFile_->is_open()) {
+    spdlog::error("currFile is not open!!!");
+    return -1;
   }
   int prev_num = (files_.size() - 1) *(MAPSIZE / sizeof(Item));
   return prev_num + curr_ - reinterpret_cast<Item *>(currFile_->start_);
@@ -182,18 +165,40 @@ int Plate::gen_sorted_paths(const std::string &dir, std::vector<std::string> &pa
 }
 
 int Plate::create_new_mmapFile() {
-  std::string new_path = DataFileName(dir_, files_.size());
+  if (files_.size() == 0) {
+    spdlog::error("create_new_mmapFile when thie isn't old mmap file");
+    return -1;
+  }
+  closeMMapFile(files_.back());
 
-  int fd = open(new_path.c_str(), O_RDWR | O_CREAT, 0644);
-  if (fd >= 0) {
-    if (posix_fallocate(fd, 0, MAPSIZE) != 0) {
-      spdlog::error("posix_fallocate failed");
-      close(fd);
-      return -1;
+  std::string new_path = DataFileName(dir_, files_.size());
+  MMapFile file(new_path, -1, nullptr);
+  files_.push_back(file);
+  currFile_ = &files_.back();
+  openMMapFileIfNotOpen(*currFile_);
+  curr_ = reinterpret_cast<Item *>(currFile_->start_);
+  return 0;
+}
+
+int Plate::openMMapFileIfNotOpen(MMapFile &file) {
+  if (file.is_open()) {
+    return 0;
+  }
+  bool new_create = false;
+  // open data file  
+  int fd = open(file.path_.c_str(), O_RDWR, 0644);
+  if (fd < 0 && errno == ENOENT) {
+    fd = open(file.path_.c_str(), O_RDWR | O_CREAT, 0644);
+    if (fd >= 0) {
+      new_create = true;
+      if (posix_fallocate(fd, 0, MAPSIZE) != 0) {
+        spdlog::error("posix_fallocate failed");
+        close(fd);
+        return -1;
+      }
     }
   }
   if (fd < 0) {
-    spdlog::error("create data file failed");
     return -1;
   }
   // mmap data file
@@ -203,10 +208,22 @@ int Plate::create_new_mmapFile() {
     close(fd);
     return -1;
   }
-  MMapFile file(fd, reinterpret_cast<char *>(ptr));
-  files_.push_back(file);
-  memset(ptr, 0, MAPSIZE);
-  currFile_ = &files_.back();
-  curr_ = reinterpret_cast<Item *>(ptr);
+  file.fd_ = fd;
+  file.start_ = reinterpret_cast<char *>(ptr);
+  if (new_create) {
+    memset(ptr, 0, MAPSIZE);
+  }
+  return 0;
+}
+
+int Plate::closeMMapFile(MMapFile &file) {
+  if (!file.is_open()) {
+    spdlog::error("close a not open file");
+    return -1;
+  }
+  munmap(file.start_, MAPSIZE);
+  close(file.fd_);
+  file.fd_ = -1;
+  file.start_ = nullptr;
   return 0;
 }
