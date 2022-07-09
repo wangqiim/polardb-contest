@@ -1,5 +1,6 @@
 #include <string>
 #include <vector>
+#include <fstream>
 
 const int RECORDSIZE = 8 + 128 + 128 + 8;
 const int RECORDNUM = 1000000 * 50; // about 13G think about 32bit overflow

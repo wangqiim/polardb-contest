@@ -61,9 +61,29 @@ int Plate::Init() {
   return 0;
 }
 
+void print_resident_set_size() {
+  double resident_set = 0.0;
+  std::ifstream stat_stream("/proc/self/stat",std::ios_base::in);
+  std::string pid, comm, state, ppid, pgrp, session, tty_nr;
+  std::string tpgid, flags, minflt, cminflt, majflt, cmajflt;
+  std::string utime, stime, cutime, cstime, priority, nice;
+  std::string O, itrealvalue, starttime;
+  unsigned long vsize;
+  long rss;
+  stat_stream >> pid >> comm >> state >> ppid >> pgrp >> session >> tty_nr
+          >> tpgid >> flags >> minflt >> cminflt >> majflt >> cmajflt
+          >> utime >> stime >> cutime >> cstime >> priority >> nice
+          >> O >> itrealvalue >> starttime >> vsize >> rss;
+  stat_stream.close();
+  long page_size_kb = sysconf(_SC_PAGE_SIZE) / 1024;
+  resident_set = (double)rss * (double)page_size_kb / (1024 * 1024);
+  spdlog::info("plate current process memory size: {0:f}g", resident_set);
+}
+
 int Plate::append(const void *datas, Location &location) {
   if (reinterpret_cast<char *>(curr_ + 1)> currFile_->start_ + MAPSIZE) {
     spdlog::info("plate currFile_ haven't space, create and mmap a new file");
+    print_resident_set_size();
     create_new_mmapFile();
   }
   location.file_id_ = files_.size() - 1;
