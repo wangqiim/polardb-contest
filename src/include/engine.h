@@ -2,15 +2,19 @@
 #include <unordered_map>
 #include <map>
 #include <mutex>
+#include "user.h"
+
+
 
 // id int64, user_id char(128), name char(128), salary int64
 // pk : id 			    //主键索引
 // uk : user_id 		//唯一索引
 // sk : salary			//普通索引
 
-using primary_key = std::unordered_map<int64_t, Location>;
-using unique_key  = std::unordered_map<std::string, Location>;
-using normal_key  = std::multimap<int64_t, Location>;
+using primary_key = std::unordered_map<int64_t, User>;
+using unique_key  = std::unordered_map<std::string, int64_t>;
+using normal_key  = std::multimap<int64_t, int64_t>;
+
 
 class Engine {
   public:
