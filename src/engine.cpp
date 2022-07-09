@@ -146,7 +146,7 @@ int Engine::Init() {
 
 int Engine::Append(const void *datas) {
   std::lock_guard<std::mutex> lock(mtx_);
-  if ((++write_cnt_) % 1000 == 0) {
+  if ((++write_cnt_) % 1 == 0) {
     spdlog::debug("[wangqiim] write {}", ((User *)datas)->to_string());
   }
   // mtx_.lock();
@@ -184,6 +184,7 @@ size_t Engine::Read(void *ctx, int32_t select_column,
     int32_t where_column, const void *column_key, 
     size_t column_key_len, void *res) {
   std::lock_guard<std::mutex> lock(mtx_);
+  spdlog::debug("[engine_read] [select_column:{0:d}] [where_column:{1:d}] [column_key_len:{2:d}]", select_column, where_column, column_key_len); 
   User user;
   size_t res_num = 0;
   switch(where_column) {
@@ -248,13 +249,13 @@ size_t Engine::Read(void *ctx, int32_t select_column,
       break;
 
       case Salary: {
+        int64_t salary = *((int64_t *)column_key);
         if ((++cnt4_) % 1 == 0) {
-          spdlog::debug("[wangqiim] read select_column[{}], where_column[Salary]", select_column);
+          spdlog::debug("[wangqiim] read select_column[{}], where_column[Salary = {}], writecnt = {}", select_column, salary, write_cnt_);
         }
         if (column_key_len != 8) {
           spdlog::error("read column_key_len is: {}, expcted: 8", column_key_len);
         }
-        int64_t salary = *((int64_t *)column_key);
 
         uint32_t id3 = salary % 8;
         idx_salary_mtx_list_[id3].lock();

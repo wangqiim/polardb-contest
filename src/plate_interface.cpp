@@ -11,7 +11,7 @@ void engine_write( void *ctx, const void *data, size_t len) {
     if (len != RECORDSIZE) {
         spdlog::error("engine_write len != {}", RECORDSIZE);
     }
-    memcpy(&user,data,len);
+    memcpy(&user,data,len); // todo: dead code
     if (len != RECORDSIZE) {
       spdlog::error("engine_write len not equal to {:d}", RECORDSIZE);
     }
@@ -20,7 +20,6 @@ void engine_write( void *ctx, const void *data, size_t len) {
 
 size_t engine_read( void *ctx, int32_t select_column,
     int32_t where_column, const void *column_key, size_t column_key_len, void *res) {
-    spdlog::debug("[engine_read] [select_column:{0:d}] [where_column:{1:d}] [column_key_len:{2:d}]", select_column, where_column, column_key_len); 
     size_t res_num = engine->Read(ctx, select_column, where_column, column_key, column_key_len, res);
     return res_num;
 }
