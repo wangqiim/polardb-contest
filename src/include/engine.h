@@ -35,9 +35,14 @@ class Engine {
     const char* dir_;
     Plate* plate_;
 
-    primary_key idx_id_;
-    unique_key idx_user_id_;
-    normal_key idx_salary_;
+    std::mutex idx_id_mtx_list_[8];
+    primary_key *idx_id_list_[8];
+
+    std::mutex idx_user_id_mtx_list_[8];
+    unique_key *idx_user_id_list_[8];
+
+    std::mutex idx_salary_mtx_list_[8];
+    normal_key *idx_salary_list_[8];
     
     // debug log
     int write_cnt_ = 0;
