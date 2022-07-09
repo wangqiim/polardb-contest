@@ -145,6 +145,7 @@ int Engine::Init() {
 }
 
 int Engine::Append(const void *datas) {
+  std::lock_guard<std::mutex> lock(mtx_);
   // if ((++write_cnt_) % 1 == 0) {
   //   spdlog::info("[wangqiim] write {}", ((User *)datas)->to_string());
   // }
@@ -182,6 +183,7 @@ int Engine::Append(const void *datas) {
 size_t Engine::Read(void *ctx, int32_t select_column,
     int32_t where_column, const void *column_key, 
     size_t column_key_len, void *res) {
+  std::lock_guard<std::mutex> lock(mtx_);
   User user;
   size_t res_num = 0;
   switch(where_column) {

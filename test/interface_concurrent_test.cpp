@@ -57,7 +57,7 @@ TEST(InterfaceConcurrentTest, BasicConcurrent) {
   EXPECT_EQ(0, rmtree(disk_dir));
   void* ctx = engine_init(nullptr, nullptr, 0, "/mnt/aep/", disk_dir);
 
-  int threadNum = 8;
+  int threadNum = 30;
   int writeNumPerThread = 10000;
   LaunchParallelTest(threadNum, ReadAfterWriteHelper, ctx, writeNumPerThread);
 
