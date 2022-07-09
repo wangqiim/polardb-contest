@@ -1,5 +1,4 @@
 #include "engine.h"
-#include "user.h"
 #include "spdlog/spdlog.h"
 
 void add_res(const User &user, int32_t select_column, void **result) {
@@ -44,11 +43,11 @@ class Index_Builder {
 
 void Index_Builder::build(User *user, Location *location) {
   // build pk index
-  idx_id_->insert({user->id, Location(location->file_id_, location->offset_)});
+  idx_id_->insert({user->id, *user});
   // build uk index
-  idx_user_id_->insert({std::string(user->user_id, sizeof(user->user_id)), Location(location->file_id_, location->offset_)});
+  idx_user_id_->insert({std::string(user->user_id, sizeof(user->user_id)), user->id});
   // build nk index
-  idx_salary_->insert({user->salary, Location(location->file_id_, location->offset_)});
+  idx_salary_->insert({user->salary,user->id});
 }
 
 void build_index(void *record, void *location, void *context) {
@@ -148,11 +147,11 @@ int Engine::Append(const void *datas) {
   } else if (idx_user_id_.count(std::string(user->user_id, 128)) != 0) {
     spdlog::error("insert dup user_id: {}", user->user_id);
   }
-  idx_id_.insert({user->id, location});
+  idx_id_.insert({user->id, *user});
   // build uk index
-  idx_user_id_.insert({std::string(user->user_id, sizeof(user->user_id)), location}); // must use string(char* s, size_t n) construct funciton
+  idx_user_id_.insert({std::string(user->user_id, sizeof(user->user_id)), user->id}); // must use string(char* s, size_t n) construct funciton
   // build nk index
-  idx_salary_.insert({user->salary, location});
+  idx_salary_.insert({user->salary, user->id});
   return 0;
 }
 
@@ -171,7 +170,7 @@ size_t Engine::Read(void *ctx, int32_t select_column,
         auto iter = idx_id_.find(id);
         if (iter != idx_id_.end()) {
           res_num = 1;
-          plate_->get(iter->second, &user);
+          user = iter->second;
           add_res(user, select_column, &res);
         }
         if ((++cnt1_) % 1 == 0) {
@@ -188,7 +187,8 @@ size_t Engine::Read(void *ctx, int32_t select_column,
         auto iter = idx_user_id_.find(user_id);
         if (iter != idx_user_id_.end()) {
           res_num = 1;
-          plate_->get(iter->second, &user);
+          int64_t id = iter->second;
+          user = idx_id_.find(id)->second;
           add_res(user, select_column, &res);
         }
         if ((++cnt2_) % 1 == 0) {
@@ -223,7 +223,8 @@ size_t Engine::Read(void *ctx, int32_t select_column,
         auto iter = range.first;
         while (iter != range.second) {
           res_num += 1;
-          plate_->get(iter->second, &user);
+          int64_t id = iter->second;
+          user = idx_id_.find(id)->second;
           add_res(user, select_column, &res);
           iter++;
         }
