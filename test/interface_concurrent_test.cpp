@@ -28,7 +28,7 @@ void ReadAfterWriteHelper(void *ctx, int writeNumPerThread,
     TestUser user;
     memcpy(&user.name, "name", 5);
 
-    char res[3 * 128];
+    char *res = new char[writeNumPerThread * 128];
     size_t read_cnt = 0;
     int start = writeNumPerThread * thread_itr; // different thread write different key
     int end = writeNumPerThread * (thread_itr + 1);
@@ -36,7 +36,7 @@ void ReadAfterWriteHelper(void *ctx, int writeNumPerThread,
     for (int i = start; i < end; i++) {
       user.id = i;
       snprintf(user.user_id, sizeof(user.user_id), "%d", i);
-      user.salary = i;
+      user.salary = start;
       engine_write(ctx, &user, sizeof(user));
 
       read_cnt = engine_read(ctx, Id, Userid, &user.user_id, 128, res);
@@ -48,17 +48,17 @@ void ReadAfterWriteHelper(void *ctx, int writeNumPerThread,
       EXPECT_EQ(1, read_cnt);
       
       read_cnt = engine_read(ctx, Id, Salary, &user.salary, 8, res);
-      EXPECT_EQ(0, memcmp(res, (char *)&(user.id), 8));
-      EXPECT_EQ(1, read_cnt);
+      EXPECT_EQ(i - start + 1, read_cnt);
     }
+    delete res;
 }
 
 TEST(InterfaceConcurrentTest, BasicConcurrent) {
   EXPECT_EQ(0, rmtree(disk_dir));
   void* ctx = engine_init(nullptr, nullptr, 0, "/mnt/aep/", disk_dir);
 
-  int threadNum = 30;
-  int writeNumPerThread = 10000;
+  int threadNum = 20;
+  int writeNumPerThread = 100;
   LaunchParallelTest(threadNum, ReadAfterWriteHelper, ctx, writeNumPerThread);
 
   engine_deinit(ctx);

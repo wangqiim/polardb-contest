@@ -146,13 +146,13 @@ int Engine::Init() {
 
 int Engine::Append(const void *datas) {
   std::lock_guard<std::mutex> lock(mtx_);
-  // if ((++write_cnt_) % 1 == 0) {
-  //   spdlog::info("[wangqiim] write {}", ((User *)datas)->to_string());
-  // }
-  mtx_.lock();
+  if ((++write_cnt_) % 1000 == 0) {
+    spdlog::debug("[wangqiim] write {}", ((User *)datas)->to_string());
+  }
+  // mtx_.lock();
   Location location;
   plate_->append(datas, location);
-  mtx_.unlock();
+  // mtx_.unlock();
   const User *user = reinterpret_cast<const User *>(datas);
   // build pk index
   uint32_t id1 = (user->id) % 8;
