@@ -7,29 +7,7 @@
 
 #include "spdlog/spdlog.h"
 #include "engine.h"
-
-void print_resident_set_size() {
-  double resident_set = 0.0;
-  std::ifstream stat_stream("/proc/self/stat",std::ios_base::in);
-  std::string pid, comm, state, ppid, pgrp, session, tty_nr;
-  std::string tpgid, flags, minflt, cminflt, majflt, cmajflt;
-  std::string utime, stime, cutime, cstime, priority, nice;
-  std::string O, itrealvalue, starttime;
-  unsigned long vsize;
-  long rss;
-  stat_stream >> pid >> comm >> state >> ppid >> pgrp >> session >> tty_nr
-          >> tpgid >> flags >> minflt >> cminflt >> majflt >> cmajflt
-          >> utime >> stime >> cutime >> cstime >> priority >> nice
-          >> O >> itrealvalue >> starttime >> vsize >> rss;
-  stat_stream.close();
-  long page_size_kb = sysconf(_SC_PAGE_SIZE) / 1024;
-  resident_set = (double)rss * (double)page_size_kb / (1024 * 1024);
-  spdlog::info("plate current process memory size: {0:f}g", resident_set);
-}
-
-bool FileExists(const std::string& path) {
-  return access(path.c_str(), F_OK) == 0;
-}
+#include "util.h"
 
 void add_res(const User &user, int32_t select_column, void **result) {
   switch(select_column) {
@@ -83,75 +61,47 @@ void Index_Builder::build(const User *user) {
 
 // --------------------Engine-----------------------------
 Engine::Engine(const char* disk_dir)
-  : mtx_(), dir_(disk_dir), log_(nullptr),
+  : mtx_(), dir_(disk_dir), log_(),
     idx_id_list_(), idx_user_id_list_(), idx_salary_list_() {}
 
 Engine::~Engine() {
-  if (log_ == nullptr) {
-    spdlog::error("log_ is nullptr before ~Engine()");
+  for (int i = 0; i < log_.size(); i++) {
+    delete (log_[i]->GetFile());
+    delete log_[i];
   }
-  delete (log_->GetFile());
-  delete log_;
-  log_ = nullptr;
+  log_.clear();
 }
 
 int Engine::Init() {
   std::lock_guard<std::mutex> lock(mtx_);
 
-  Index_Builder index_builder(idx_id_list_, idx_user_id_list_, idx_salary_list_);
-  
   spdlog::info("engine start init");
 
   // create dir
-  if (!FileExists(dir_) && 0 != mkdir(dir_.c_str(), 0755)) {
+  if (!Util::FileExists(dir_) && 0 != mkdir(dir_.c_str(), 0755)) {
     spdlog::error("init create dir[{}] fail!", dir_);
     return -1;
   }
 
-  std::string fname = WALFileName(dir_);
-  // create log
-  if (!FileExists(fname)) {
-    int fd = open(fname.c_str(), O_RDWR | O_CREAT, 0644);
-    if (fd >= 0) {
-      close(fd);
-    } else {
-      spdlog::error("init create log[{}] fail!", dir_);
-      return -1;
-    }
-  }
-
-  PosixSequentialFile *file = nullptr;
-  int retry_num = 0;
-  int ret = 0;
-  while ((ret = PosixEnv::NewSequentialFile(fname, &file)) != 0) {
-    spdlog::info("open NewSequentialFile[{}] fail, retry num: {}, sleep 1s", fname, retry_num);
-    sleep(1); // sleep 1 second
-    if (retry_num == 3) {
-      break;
-    }
-    retry_num++;
-  }
-  if (ret == 0) {
-    int cnt = 0;
-    // log is exist, need recovery
-    Reader reader(file);
-    std::string record;
-    while (reader.ReadRecord(record, RecordSize)) {
-      const User *user = (const User *)record.data();
-      index_builder.build(user);
-      cnt++;
-    }
-    spdlog::info("build index done, num = {}", cnt);
-    delete(file);
-  }
-  
-  PosixWritableFile *walfile = nullptr;
-  ret = PosixEnv::NewAppendableFile(fname, &walfile);
-  if (ret != 0) {
+  // build index
+  std::vector<std::string> file_paths;
+  Util::gen_sorted_paths(dir_, kWALFileName, file_paths, WALNum);
+  int record_num = replay_index(file_paths);
+  if (record_num == -1) {
+    spdlog::error("replay build index fail");
     return -1;
   }
-  log_ = new Writer(walfile);
-  print_resident_set_size();
+  spdlog::info("replay build index done, record num = {}", record_num);
+  
+  PosixWritableFile *walfile = nullptr;
+  for (const auto &fname: file_paths) {
+    int ret = PosixEnv::NewAppendableFile(fname, &walfile);
+    if (ret != 0) {
+      return -1;
+    }
+    log_.push_back(new Writer(walfile));
+  }
+  Util::print_resident_set_size();
   spdlog::info("engine init done");
   return 0;
 }
@@ -160,10 +110,14 @@ int Engine::Append(const void *datas) {
   if ((++write_cnt_) % 1 == 0) {
     spdlog::debug("[wangqiim] write {}", ((User *)datas)->to_string());
   }
-  mtx_.lock();
-  log_->AddRecord(datas, RecordSize);
-  mtx_.unlock();
+
   const User *user = reinterpret_cast<const User *>(datas);
+  uint32_t log_id = ((uint32_t)user->id) % WALNum;
+
+  mtx_.lock();
+  log_[log_id]->AddRecord(datas, RecordSize);
+  mtx_.unlock();
+
   // build pk index
   uint32_t id1 = ((uint32_t)user->id) % ShardNum;
   uint32_t id2 = (StrHash(user->user_id, sizeof(user->user_id))) % ShardNum;
@@ -281,4 +235,39 @@ size_t Engine::Read(void *ctx, int32_t select_column,
       break;
   }
   return res_num;
+}
+
+int Engine::replay_index(const std::vector<std::string> paths) {
+  Index_Builder index_builder(idx_id_list_, idx_user_id_list_, idx_salary_list_);
+  int cnt = 0;
+  for (const auto &fname: paths) {
+    bool new_create = false;
+    if (!Util::FileExists(fname)) {
+      int fd = open(fname.c_str(), O_RDWR | O_CREAT, 0644);
+      if (fd >= 0) {
+        new_create = true;
+        close(fd);
+      } else {
+        spdlog::error("init create log[{}] fail!", dir_);
+        return -1;
+      }
+    }
+    if (!new_create) {
+      PosixSequentialFile *file = nullptr;
+      int retry_num = 0;
+      int ret = PosixEnv::NewSequentialFile(fname, &file);
+      if (ret == 0) {
+        // log is exist, need recovery
+        Reader reader(file);
+        std::string record;
+        while (reader.ReadRecord(record, RecordSize)) {
+          const User *user = (const User *)record.data();
+          index_builder.build(user);
+          cnt++;
+        }
+        delete(file);
+      }
+    }
+  }
+  return cnt;
 }

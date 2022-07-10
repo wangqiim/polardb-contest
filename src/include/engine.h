@@ -5,7 +5,6 @@
 #include "log.h"
 
 
-
 // id int64, user_id char(128), name char(128), salary int64
 // pk : id 			    //主键索引
 // uk : user_id 		//唯一索引
@@ -16,6 +15,7 @@ using unique_key  = std::unordered_map<std::string, int64_t>;
 using normal_key  = std::multimap<int64_t, int64_t>;
 
 const int ShardNum = 25;
+const int WALNum = 20;
 
 class Engine {
   public:
@@ -31,10 +31,12 @@ class Engine {
       size_t column_key_len, void *res);
     
   private:
+    int replay_index(const std::vector<std::string> paths);
+
     std::mutex mtx_;
 
     const std::string dir_;
-    Writer *log_;
+    std::vector<Writer *> log_;
 
     std::mutex idx_id_mtx_list_[ShardNum];
     primary_key idx_id_list_[ShardNum];

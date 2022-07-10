@@ -1,13 +1,6 @@
 #include "spdlog/spdlog.h"
 #include "log.h"
 
-const char kWALFileName[] = "WAL";
-
-std::string WALFileName(const std::string &dir) {
-  std::string filename = dir + "/";
-  return filename + kWALFileName;
-}
-
 Writer::Writer(PosixWritableFile* dest) : dest_(dest) {}
 
 int Writer::AddRecord(const void* data, int len) {

@@ -1,7 +1,7 @@
 #include <string>
 #include "env.h"
 
-std::string WALFileName(const std::string &dir);
+const char kWALFileName[] = "WAL";
 
 class Writer {
  public:

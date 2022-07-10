@@ -62,5 +62,8 @@ TEST(InterfaceConcurrentTest, BasicConcurrent) {
   LaunchParallelTest(threadNum, ReadAfterWriteHelper, ctx, writeNumPerThread);
 
   engine_deinit(ctx);
+  engine_init(nullptr, nullptr, 0, "/mnt/aep/", disk_dir);
+  engine_deinit(ctx);
+  engine_init(nullptr, nullptr, 0, "/mnt/aep/", disk_dir);
   EXPECT_EQ(0, rmtree(disk_dir));
 }
