@@ -69,3 +69,53 @@ TEST(PlateTest, Basic) {
     delete plate;
     EXPECT_EQ(0, rmtree(disk_dir));
 }
+
+TEST(PlateTest, openFileNum) {
+    EXPECT_EQ(0, rmtree(disk_dir));
+    Plate *plate = new Plate(disk_dir);
+    plate->Init();
+
+    EXPECT_EQ(0, plate->size());
+
+    TestUser user;
+    user.id = 0;
+    user.salary = 100;
+    memcpy(&user.user_id,"12345",5);
+    memcpy(&user.name,"hello",5);
+
+    int ret = 0;
+
+    Location loc;
+    int write_cnt = MINIRECORDNUM * 5;
+
+    for (int i = 0; i < write_cnt; i++) {
+        int ret = plate->append(reinterpret_cast<void *>(&user), loc);
+        EXPECT_EQ(0, ret);
+    }
+    EXPECT_EQ(write_cnt, plate->size());
+    EXPECT_EQ(1, plate->openFileNum());
+
+    Reader reader;
+    EXPECT_EQ(0, reader.get_cnt());
+    ret = plate->scan(read_record, reinterpret_cast<void *>(&reader));
+    EXPECT_EQ(0, ret);
+    EXPECT_EQ(write_cnt, reader.get_cnt());
+    EXPECT_EQ(1, plate->openFileNum());
+
+    delete plate;
+
+    plate = new Plate(disk_dir);
+    plate->Init();
+
+    EXPECT_EQ(write_cnt, plate->size());
+    EXPECT_EQ(1, plate->openFileNum());
+    reader.reset();
+    EXPECT_EQ(0, reader.get_cnt());
+    ret = plate->scan(read_record, reinterpret_cast<void *>(&reader));
+    EXPECT_EQ(0, ret);
+    EXPECT_EQ(MINIRECORDNUM * 3, reader.get_cnt());
+    EXPECT_EQ(1, plate->openFileNum());
+
+    delete plate;
+    EXPECT_EQ(0, rmtree(disk_dir));
+}

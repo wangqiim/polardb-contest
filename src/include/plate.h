@@ -47,6 +47,7 @@ class Plate {
     int scan(void (*cb)(void *user, void *location, void *context), void *context);
   
     int size();
+    int openFileNum();
   private:
     // sort and record all data (at least one) file by fiile name
     int gen_sorted_paths(const std::string &dir, std::vector<std::string> &paths);

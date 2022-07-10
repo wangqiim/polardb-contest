@@ -247,3 +247,13 @@ int Plate::closeMMapFile(MMapFile &file) {
   file.start_ = nullptr;
   return 0;
 }
+
+int Plate::openFileNum() {
+  int num = 0;
+  for (auto &file: files_) {
+    if (file.is_open()) {
+      num++;
+    }
+  }
+  return num;
+}
