@@ -14,6 +14,10 @@ int Writer::AddRecord(const void* data, int len) {
   return dest_->Append(data, len);
 }
 
+PosixWritableFile* Writer::GetFile() {
+  return dest_;
+}
+
 Reader::Reader(PosixSequentialFile* file)
     : file_(file), eof_(false), buf_(), backing_store_()
     , buf_start_offset_(0), buf_end_offset_(0) {}
@@ -30,13 +34,18 @@ bool Reader::ReadRecord(std::string &record, int len) {
       record.append(buf_.data() + buf_start_offset_, cur_record_len);
       int status = file_->Read(kBlockSize, buf_, backing_store_);
       if (status != 0) {
-        eof_ = true;
+        return false;
       }
       buf_start_offset_ = 0;
       buf_end_offset_ = buf_.size();
+      if (buf_.size() == 0) {
+        eof_ = true;
+      }
     }
     if (RecordSize - cur_record_len > buf_end_offset_ - buf_start_offset_) {
-      spdlog::error("can't read a complete record");
+      if (cur_record_len != 0) {
+        spdlog::info("can't read a complete record");
+      } // else eof!
       return false;
     }
     record.append(buf_.data() + buf_start_offset_, RecordSize - cur_record_len);

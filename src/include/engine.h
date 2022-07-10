@@ -1,8 +1,8 @@
-#include "plate.h"
 #include <unordered_map>
 #include <map>
 #include <mutex>
 #include "user.h"
+#include "log.h"
 
 
 
@@ -32,8 +32,8 @@ class Engine {
   private:
     std::mutex mtx_;
 
-    const char* dir_;
-    Plate* plate_;
+    const std::string dir_;
+    Writer *log_;
 
     std::mutex idx_id_mtx_list_[8];
     primary_key *idx_id_list_[8];

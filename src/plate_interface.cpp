@@ -7,11 +7,11 @@
 Engine *engine;
 
 void engine_write( void *ctx, const void *data, size_t len) {
-    if (len != RECORDSIZE) {
-        spdlog::error("engine_write len != {}", RECORDSIZE);
+    if (len != RecordSize) {
+        spdlog::error("engine_write len != {}", RecordSize);
     }
-    if (len != RECORDSIZE) {
-      spdlog::error("engine_write len not equal to {:d}", RECORDSIZE);
+    if (len != RecordSize) {
+      spdlog::error("engine_write len not equal to {:d}", RecordSize);
     }
     engine->Append(data);
  }

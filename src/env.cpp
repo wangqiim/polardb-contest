@@ -1,5 +1,6 @@
 #include "env.h"
 #include <unistd.h>
+#include <fcntl.h>
 #include "spdlog/spdlog.h"
 #include <algorithm>
 
@@ -12,6 +13,14 @@ int PosixError(const std::string& context, int error_number) {
   }
 }
 
+int PosixInfo(const std::string& context, int error_number) {
+  if (error_number == ENOENT) {
+    spdlog::info("[{}] file not found", context);
+    return error_number;
+  } else { // IOE
+    return 0;
+  }
+}
 //--------------------PosixSequentialFile--------------------------
 PosixSequentialFile::PosixSequentialFile(std::string filename, int fd): fd_(fd), filename_(std::move(filename)) {}
 PosixSequentialFile::~PosixSequentialFile() { close(fd_); }
@@ -39,7 +48,7 @@ int PosixSequentialFile::Skip(uint64_t n) {
 }
 
 //--------------------PosixWritableFile--------------------------
-int SyncFd(int fd, const std::string& fd_path) {
+int PosixWritableFile::SyncFd(int fd, const std::string& fd_path) {
   bool sync_success = ::fsync(fd) == 0;
   if (sync_success) {
     return 0;
@@ -117,12 +126,22 @@ int PosixWritableFile::Sync() {
   return SyncFd(fd_, filename_);
 }
 
+int PosixWritableFile::Close() {
+  int status = FlushBuffer();
+  const int close_result = ::close(fd_);
+  fd_ = -1;
+  if (close_result < 0 && status == 0) {
+    status = PosixError(filename_, errno);
+  }
+  return status;
+}
 //--------------------PosixEnv--------------------------
 int PosixEnv::NewSequentialFile(const std::string& filename, PosixSequentialFile** result) {
   int fd = ::open(filename.c_str(), O_RDONLY);
   if (fd < 0) {
     *result = nullptr;
-    return PosixError(filename, errno);
+    // 读一个wal文件，可能是第一次读，因此打不开不用返回错误。
+    return PosixInfo(filename, errno);
   }
 
   *result = new PosixSequentialFile(filename, fd);

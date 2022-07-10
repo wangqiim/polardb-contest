@@ -113,7 +113,7 @@ TEST(PlateTest, openFileNum) {
     EXPECT_EQ(0, reader.get_cnt());
     ret = plate->scan(read_record, reinterpret_cast<void *>(&reader));
     EXPECT_EQ(0, ret);
-    EXPECT_EQ(MINIRECORDNUM * 3, reader.get_cnt());
+    EXPECT_EQ(MINIRECORDNUM * 5, reader.get_cnt());
     EXPECT_EQ(1, plate->openFileNum());
 
     delete plate;

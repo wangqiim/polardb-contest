@@ -16,7 +16,8 @@ class Writer {
   ~Writer() = default;
 
   int AddRecord(const void* data, int len);
-
+  
+  PosixWritableFile* GetFile(); // 外部delete dest_;
  private:
   PosixWritableFile* dest_;
 };

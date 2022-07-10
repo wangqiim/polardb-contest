@@ -13,7 +13,7 @@ TEST(InterfaceTest, Basic) {
     void* ctx = engine_init(nullptr, nullptr, 0, "/mnt/aep/", disk_dir);
     engine_write(ctx,&user,sizeof(user));
     char res[100*128];
-    size_t read_cnt = engine_read(ctx, Id, Name, &user.name, 128, res);
+    size_t read_cnt = engine_read(ctx, Id, Userid, &user.user_id, 128, res);
 
     EXPECT_EQ(1, read_cnt);
     EXPECT_EQ(0, *(int64_t *)res);
@@ -68,9 +68,6 @@ TEST(InterfaceTest, ManyUser) {
     size_t read_cnt = engine_read(ctx, Id, Salary, &user1.salary, 8, res);
     EXPECT_EQ(2, read_cnt);
 
-    read_cnt = engine_read(ctx, Id, Name, &user2.name, 128, res);
-    EXPECT_EQ(3, read_cnt);
-
     read_cnt = engine_read(ctx, Id, Userid, &user4.user_id, 128, res);
     EXPECT_EQ(1, read_cnt);
 
@@ -118,27 +115,21 @@ TEST(InterfaceTest, BasicReplay) {
     size_t read_cnt = engine_read(ctx, Id, Salary, &user1.salary, 8, res);
     EXPECT_EQ(2, read_cnt);
 
-    read_cnt = engine_read(ctx, Id, Name, &user2.name, 128, res);
-    EXPECT_EQ(3, read_cnt);
-
     engine_deinit(ctx);
     // replay
     ctx = engine_init(nullptr, nullptr, 0, "/mnt/aep/", disk_dir);
     read_cnt = engine_read(ctx, Id, Salary, &user1.salary, 8, res);
     EXPECT_EQ(2, read_cnt);
-
-    read_cnt = engine_read(ctx, Id, Name, &user2.name, 128, res);
-    EXPECT_EQ(3, read_cnt);
     
     TestUser user5;
     user5.id = 5;
     memcpy(&user5.user_id, "user5", 5);
     memcpy(&user5.name, "name2", 5);
-    user5.salary = 4;
+    user5.salary = 2;
 
     engine_write(ctx,&user5,sizeof(user5));
-    read_cnt = engine_read(ctx, Id, Name, &user2.name, 128, res);
-    EXPECT_EQ(4, read_cnt);
+    read_cnt = engine_read(ctx, Id, Salary, &user1.salary, 8, res);
+    EXPECT_EQ(3, read_cnt);
 
     engine_deinit(ctx);
     EXPECT_EQ(0, rmtree(disk_dir));
@@ -154,7 +145,7 @@ TEST(InterfaceTest, ManyWrite) {
 
     void* ctx = engine_init(nullptr, nullptr, 0, "/mnt/aep/", disk_dir);
 
-    int write_cnt = MINIRECORDNUM * 2;
+    int write_cnt = 10000;
     for (int i = 0; i < write_cnt; i++) {
         user1.id = i;
         snprintf(user1.user_id, sizeof(user1.user_id), "%d", i);
@@ -180,7 +171,7 @@ TEST(InterfaceTest, ManyWriteReplay) {
 
     void* ctx = engine_init(nullptr, nullptr, 0, "/mnt/aep/", disk_dir);
 
-    int write_cnt = MINIRECORDNUM * 2;
+    int write_cnt = 10000;
     for (int i = 0; i < write_cnt; i++) {
         user1.id = i;
         snprintf(user1.user_id, sizeof(user1.user_id), "%d", i);
