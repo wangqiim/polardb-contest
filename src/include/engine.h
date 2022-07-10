@@ -15,7 +15,7 @@ using unique_key  = std::unordered_map<std::string, int64_t>;
 using normal_key  = std::multimap<int64_t, int64_t>;
 
 const int ShardNum = 25;
-const int WALNum = 20;
+const int WALNum = 15;
 
 class Engine {
   public:
@@ -33,8 +33,7 @@ class Engine {
   private:
     int replay_index(const std::vector<std::string> paths);
 
-    std::mutex mtx_;
-
+    std::mutex log_mtx_list_[WALNum];
     const std::string dir_;
     std::vector<Writer *> log_;
 

@@ -61,7 +61,7 @@ void Index_Builder::build(const User *user) {
 
 // --------------------Engine-----------------------------
 Engine::Engine(const char* disk_dir)
-  : mtx_(), dir_(disk_dir), log_(),
+  : dir_(disk_dir), log_(),
     idx_id_list_(), idx_user_id_list_(), idx_salary_list_() {}
 
 Engine::~Engine() {
@@ -73,8 +73,6 @@ Engine::~Engine() {
 }
 
 int Engine::Init() {
-  std::lock_guard<std::mutex> lock(mtx_);
-
   spdlog::info("engine start init");
 
   // create dir
@@ -112,11 +110,11 @@ int Engine::Append(const void *datas) {
   }
 
   const User *user = reinterpret_cast<const User *>(datas);
-  uint32_t log_id = ((uint32_t)user->id) % WALNum;
+  uint32_t log_hash_id = ((uint32_t)user->id) % WALNum;
 
-  mtx_.lock();
-  log_[log_id]->AddRecord(datas, RecordSize);
-  mtx_.unlock();
+  log_mtx_list_[log_hash_id].lock();
+  log_[log_hash_id]->AddRecord(datas, RecordSize);
+  log_mtx_list_[log_hash_id].lock();
 
   // build pk index
   uint32_t id1 = ((uint32_t)user->id) % ShardNum;
