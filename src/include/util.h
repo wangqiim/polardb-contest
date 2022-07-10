@@ -53,7 +53,7 @@ class Util {
         return;
       }
       off_t sz = st.st_size;
-      double file_size = double(sz) / (1024 * 1024);
+      double file_size = double(sz) / (1024 * 1024 * 1024);
       spdlog::info("{0}, size: {1:f}g", fname, file_size);
     }
 

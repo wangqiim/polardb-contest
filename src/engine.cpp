@@ -65,6 +65,10 @@ Engine::Engine(const char* disk_dir)
     idx_id_list_(), idx_user_id_list_(), idx_salary_list_() {}
 
 Engine::~Engine() {
+  for (const auto &fname: file_paths_) {
+    Util::print_file_size(fname);
+  }
+  file_paths_.clear();
   for (int i = 0; i < log_.size(); i++) {
     delete (log_[i]->GetFile());
     delete log_[i];
@@ -82,9 +86,14 @@ int Engine::Init() {
   }
 
   // build index
-  std::vector<std::string> file_paths;
-  Util::gen_sorted_paths(dir_, kWALFileName, file_paths, WALNum);
-  int record_num = replay_index(file_paths);
+  Util::gen_sorted_paths(dir_, kWALFileName, file_paths_, WALNum);
+  // before replay
+  spdlog::info("before replay index");
+  for (const auto &fname: file_paths_) {
+    Util::print_file_size(fname);
+  }
+  spdlog::info("start replay index");
+  int record_num = replay_index(file_paths_);
   if (record_num == -1) {
     spdlog::error("replay build index fail");
     return -1;
@@ -92,7 +101,7 @@ int Engine::Init() {
   spdlog::info("replay build index done, record num = {}", record_num);
   
   PosixWritableFile *walfile = nullptr;
-  for (const auto &fname: file_paths) {
+  for (const auto &fname: file_paths_) {
     int ret = PosixEnv::NewAppendableFile(fname, &walfile);
     if (ret != 0) {
       return -1;

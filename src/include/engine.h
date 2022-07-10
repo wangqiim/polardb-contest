@@ -33,6 +33,7 @@ class Engine {
   private:
     int replay_index(const std::vector<std::string> paths);
 
+    std::vector<std::string> file_paths_;
     std::mutex log_mtx_list_[WALNum];
     const std::string dir_;
     std::vector<Writer *> log_;
