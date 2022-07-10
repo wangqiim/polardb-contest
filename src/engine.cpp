@@ -68,17 +68,23 @@ Engine::~Engine() {
   for (const auto &fname: file_paths_) {
     Util::print_file_size(fname);
   }
-  file_paths_.clear();
   for (int i = 0; i < log_.size(); i++) {
     delete (log_[i]->GetFile());
     delete log_[i];
   }
+  spdlog::info("afger delete log");
+  for (const auto &fname: file_paths_) {
+    Util::print_file_size(fname);
+  }
+  file_paths_.clear();
   log_.clear();
 }
 
 int Engine::Init() {
   spdlog::info("engine start init");
-
+  if (!Util::FileExists(dir_)) {
+    spdlog::info("{} path is not exist", dir_);
+  }
   // create dir
   if (!Util::FileExists(dir_) && 0 != mkdir(dir_.c_str(), 0755)) {
     spdlog::error("init create dir[{}] fail!", dir_);
