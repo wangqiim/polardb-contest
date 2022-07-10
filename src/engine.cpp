@@ -65,17 +65,11 @@ Engine::Engine(const char* disk_dir)
     idx_id_list_(), idx_user_id_list_(), idx_salary_list_() {}
 
 Engine::~Engine() {
-  for (const auto &fname: file_paths_) {
-    Util::print_file_size(fname);
-  }
   for (int i = 0; i < log_.size(); i++) {
     delete (log_[i]->GetFile());
     delete log_[i];
   }
   spdlog::info("afger delete log");
-  for (const auto &fname: file_paths_) {
-    Util::print_file_size(fname);
-  }
   file_paths_.clear();
   log_.clear();
 }
@@ -93,11 +87,6 @@ int Engine::Init() {
 
   // build index
   Util::gen_sorted_paths(dir_, kWALFileName, file_paths_, WALNum);
-  // before replay
-  spdlog::info("before replay index");
-  for (const auto &fname: file_paths_) {
-    Util::print_file_size(fname);
-  }
   spdlog::info("start replay index");
   int record_num = replay_index(file_paths_);
   if (record_num == -1) {
@@ -120,16 +109,22 @@ int Engine::Init() {
 }
 
 int Engine::Append(const void *datas) {
-  if ((++write_cnt_) % 1 == 0) {
-    spdlog::debug("[wangqiim] write {}", ((User *)datas)->to_string());
-  }
 
   const User *user = reinterpret_cast<const User *>(datas);
   uint32_t log_hash_id = ((uint32_t)user->id) % WALNum;
 
-  log_mtx_list_[log_hash_id].lock();
+  log_mtx_list_[0].lock();
+  if ((++write_cnt_) % 1000000 == 0) {
+    spdlog::info("[wangqiim] write {}", write_cnt_);
+    Util::print_resident_set_size();
+  } else if (write_cnt_ > 47000000) {
+    if (write_cnt_ % 100000 == 0) {
+      spdlog::info("[wangqiim] write {}", write_cnt_);
+      Util::print_resident_set_size();
+    }
+  }
   log_[log_hash_id]->AddRecord(datas, RecordSize);
-  log_mtx_list_[log_hash_id].unlock();
+  log_mtx_list_[0].unlock();
 
   // build pk index
   uint32_t id1 = ((uint32_t)user->id) % ShardNum;
