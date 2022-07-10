@@ -1,6 +1,31 @@
 #include <unistd.h>
+#include <fcntl.h>
+#include <dirent.h>
+#include <sys/stat.h>
+#include <sys/mman.h>
+#include <fstream>
+
 #include "spdlog/spdlog.h"
 #include "engine.h"
+
+void print_resident_set_size() {
+  double resident_set = 0.0;
+  std::ifstream stat_stream("/proc/self/stat",std::ios_base::in);
+  std::string pid, comm, state, ppid, pgrp, session, tty_nr;
+  std::string tpgid, flags, minflt, cminflt, majflt, cmajflt;
+  std::string utime, stime, cutime, cstime, priority, nice;
+  std::string O, itrealvalue, starttime;
+  unsigned long vsize;
+  long rss;
+  stat_stream >> pid >> comm >> state >> ppid >> pgrp >> session >> tty_nr
+          >> tpgid >> flags >> minflt >> cminflt >> majflt >> cmajflt
+          >> utime >> stime >> cutime >> cstime >> priority >> nice
+          >> O >> itrealvalue >> starttime >> vsize >> rss;
+  stat_stream.close();
+  long page_size_kb = sysconf(_SC_PAGE_SIZE) / 1024;
+  resident_set = (double)rss * (double)page_size_kb / (1024 * 1024);
+  spdlog::info("plate current process memory size: {0:f}g", resident_set);
+}
 
 bool FileExists(const std::string& path) {
   return access(path.c_str(), F_OK) == 0;
@@ -33,29 +58,27 @@ void add_res(const User &user, int32_t select_column, void **result) {
 // ------Index Builder-------------
 class Index_Builder {
   public:
-    Index_Builder(primary_key **idx_id,
-      unique_key **idx_user_id, normal_key  **idx_salary, size_t len)
+    Index_Builder(primary_key *idx_id,
+      unique_key *idx_user_id, normal_key  *idx_salary)
       : idx_id_(idx_id),
         idx_user_id_(idx_user_id),
-        idx_salary_(idx_salary),
-        len(len){ }
+        idx_salary_(idx_salary) { }
 
     void build(const User *user);
 
-    primary_key **idx_id_;
-    unique_key  **idx_user_id_;
-    normal_key  **idx_salary_;
-    size_t len;
+    primary_key *idx_id_;
+    unique_key  *idx_user_id_;
+    normal_key  *idx_salary_;
 };
 
 void Index_Builder::build(const User *user) {
   // build pk index
-  idx_id_[((uint32_t)user->id) % len]->insert({user->id, *user});
+  idx_id_[((uint32_t)user->id) % ShardNum].insert({user->id, *user});
   // build uk index
   size_t hid = StrHash(user->user_id, sizeof(user->user_id));
-  idx_user_id_[hid % len]->insert({std::string(user->user_id, sizeof(user->user_id)), user->id});
+  idx_user_id_[hid % ShardNum].insert({std::string(user->user_id, sizeof(user->user_id)), user->id});
   // build nk index
-  idx_salary_[((uint32_t)user->salary) % len]->insert({user->salary,user->id});
+  idx_salary_[((uint32_t)user->salary) % ShardNum].insert({user->salary,user->id});
 }
 
 // --------------------Engine-----------------------------
@@ -64,11 +87,6 @@ Engine::Engine(const char* disk_dir)
     idx_id_list_(), idx_user_id_list_(), idx_salary_list_() {}
 
 Engine::~Engine() {
-  for(size_t i = 0; i < 8; i++) {
-    delete idx_id_list_[i];
-    delete idx_user_id_list_[i];
-    delete idx_salary_list_[i];
-  }
   if (log_ == nullptr) {
     spdlog::error("log_ is nullptr before ~Engine()");
   }
@@ -80,13 +98,7 @@ Engine::~Engine() {
 int Engine::Init() {
   std::lock_guard<std::mutex> lock(mtx_);
 
-  for(size_t i = 0; i < 8; i++) {
-    idx_id_list_[i] = new primary_key;
-    idx_user_id_list_[i] = new unique_key;
-    idx_salary_list_[i] = new normal_key;
-  }
-
-  Index_Builder index_builder(idx_id_list_, idx_user_id_list_, idx_salary_list_, 8);
+  Index_Builder index_builder(idx_id_list_, idx_user_id_list_, idx_salary_list_);
   
   spdlog::info("engine start init");
 
@@ -136,6 +148,7 @@ int Engine::Init() {
     return -1;
   }
   log_ = new Writer(walfile);
+  print_resident_set_size();
   spdlog::info("engine init done");
   return 0;
 }
@@ -149,9 +162,9 @@ int Engine::Append(const void *datas) {
   mtx_.unlock();
   const User *user = reinterpret_cast<const User *>(datas);
   // build pk index
-  uint32_t id1 = ((uint32_t)user->id) % 8;
-  uint32_t id2 = (StrHash(user->user_id, sizeof(user->user_id))) % 8;
-  uint32_t id3 = ((uint32_t)user->salary) % 8;
+  uint32_t id1 = ((uint32_t)user->id) % ShardNum;
+  uint32_t id2 = (StrHash(user->user_id, sizeof(user->user_id))) % ShardNum;
+  uint32_t id3 = ((uint32_t)user->salary) % ShardNum;
 
   //  if (idx_id_list_[hid]->count(user->id) != 0) {
 //    spdlog::error("insert dup id: {}", user->id);
@@ -160,16 +173,16 @@ int Engine::Append(const void *datas) {
 //  }
 
   idx_id_mtx_list_[id1].lock();
-  idx_id_list_[id1]->insert({user->id, *user});
+  idx_id_list_[id1].insert({user->id, *user});
   idx_id_mtx_list_[id1].unlock();
   // build uk index
   idx_user_id_mtx_list_[id2].lock();
-  idx_user_id_list_[id2]->insert({std::string(user->user_id, sizeof(user->user_id)), user->id}); // must use string(char* s, size_t n) construct funciton
+  idx_user_id_list_[id2].insert({std::string(user->user_id, sizeof(user->user_id)), user->id}); // must use string(char* s, size_t n) construct funciton
   idx_user_id_mtx_list_[id2].unlock();
 
   // build nk index
   idx_salary_mtx_list_[id3].lock();
-  idx_salary_list_[id3]->insert({user->salary, user->id});
+  idx_salary_list_[id3].insert({user->salary, user->id});
   idx_salary_mtx_list_[id3].unlock();
   return 0;
 }
@@ -187,10 +200,10 @@ size_t Engine::Read(void *ctx, int32_t select_column,
           spdlog::error("read column_key_len is: {}, expcted: 8", column_key_len);
         }
         int64_t id = *((int64_t *)column_key);
-        uint32_t id1 = ((uint32_t)id) % 8;
+        uint32_t id1 = ((uint32_t)id) % ShardNum;
         idx_id_mtx_list_[id1].lock();
-        auto iter = idx_id_list_[id1]->find(id);
-        if (iter != idx_id_list_[id1]->end()) {
+        auto iter = idx_id_list_[id1].find(id);
+        if (iter != idx_id_list_[id1].end()) {
           res_num = 1;
           user = iter->second;
           add_res(user, select_column, &res);
@@ -207,17 +220,17 @@ size_t Engine::Read(void *ctx, int32_t select_column,
           spdlog::error("read column_key_len is: {}, expcted: 128", column_key_len);
         }
         std::string user_id((char *)column_key, column_key_len); // todo: column_key_len is 128???
-        uint32_t id2 = (StrHash((char *)column_key, column_key_len)) % 8;
+        uint32_t id2 = (StrHash((char *)column_key, column_key_len)) % ShardNum;
 
         idx_user_id_mtx_list_[id2].lock();
-        auto iter = idx_user_id_list_[id2]->find(user_id);
-        if (iter != idx_user_id_list_[id2]->end()) {
+        auto iter = idx_user_id_list_[id2].find(user_id);
+        if (iter != idx_user_id_list_[id2].end()) {
           res_num = 1;
           int64_t id = iter->second;
 
-          uint32_t id1 = ((uint32_t)id) % 8;
+          uint32_t id1 = ((uint32_t)id) % ShardNum;
           idx_id_mtx_list_[id1].lock();
-          user = idx_id_list_[id1]->find(id)->second;
+          user = idx_id_list_[id1].find(id)->second;
           idx_id_mtx_list_[id1].unlock();
           add_res(user, select_column, &res);
         }
@@ -242,16 +255,16 @@ size_t Engine::Read(void *ctx, int32_t select_column,
           spdlog::error("read column_key_len is: {}, expcted: 8", column_key_len);
         }
 
-        uint32_t id3 = ((uint32_t)salary) % 8;
+        uint32_t id3 = ((uint32_t)salary) % ShardNum;
         idx_salary_mtx_list_[id3].lock();
-        auto range = idx_salary_list_[id3]->equal_range(salary);
+        auto range = idx_salary_list_[id3].equal_range(salary);
         auto iter = range.first;
         while (iter != range.second) {
           res_num += 1;
           int64_t id = iter->second;
-          uint32_t id1 = ((uint32_t)id) % 8;
+          uint32_t id1 = ((uint32_t)id) % ShardNum;
           idx_id_mtx_list_[id1].lock();
-          user = idx_id_list_[id1]->find(id)->second;
+          user = idx_id_list_[id1].find(id)->second;
           idx_id_mtx_list_[id1].unlock();
           add_res(user, select_column, &res);
           iter++;

@@ -15,6 +15,7 @@ using primary_key = std::unordered_map<int64_t, User>;
 using unique_key  = std::unordered_map<std::string, int64_t>;
 using normal_key  = std::multimap<int64_t, int64_t>;
 
+const int ShardNum = 25;
 
 class Engine {
   public:
@@ -35,14 +36,14 @@ class Engine {
     const std::string dir_;
     Writer *log_;
 
-    std::mutex idx_id_mtx_list_[8];
-    primary_key *idx_id_list_[8];
+    std::mutex idx_id_mtx_list_[ShardNum];
+    primary_key idx_id_list_[ShardNum];
 
-    std::mutex idx_user_id_mtx_list_[8];
-    unique_key *idx_user_id_list_[8];
+    std::mutex idx_user_id_mtx_list_[ShardNum];
+    unique_key idx_user_id_list_[ShardNum];
 
-    std::mutex idx_salary_mtx_list_[8];
-    normal_key *idx_salary_list_[8];
+    std::mutex idx_salary_mtx_list_[ShardNum];
+    normal_key idx_salary_list_[ShardNum];
     
     // debug log
     int write_cnt_ = 0;
