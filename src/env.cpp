@@ -13,14 +13,6 @@ int PosixError(const std::string& context, int error_number) {
   }
 }
 
-int PosixInfo(const std::string& context, int error_number) {
-  if (error_number == ENOENT) {
-    spdlog::info("[{}] file not found", context);
-    return error_number;
-  } else { // IOE
-    return 0;
-  }
-}
 //--------------------PosixSequentialFile--------------------------
 PosixSequentialFile::PosixSequentialFile(std::string filename, int fd): fd_(fd), filename_(std::move(filename)) {}
 PosixSequentialFile::~PosixSequentialFile() { close(fd_); }
@@ -140,8 +132,7 @@ int PosixEnv::NewSequentialFile(const std::string& filename, PosixSequentialFile
   int fd = ::open(filename.c_str(), O_RDONLY);
   if (fd < 0) {
     *result = nullptr;
-    // 读一个wal文件，可能是第一次读，因此打不开不用返回错误。
-    return PosixInfo(filename, errno);
+    return PosixError(filename, errno);
   }
 
   *result = new PosixSequentialFile(filename, fd);

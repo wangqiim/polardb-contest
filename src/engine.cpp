@@ -1,3 +1,4 @@
+#include <unistd.h>
 #include "spdlog/spdlog.h"
 #include "engine.h"
 
@@ -89,14 +90,35 @@ int Engine::Init() {
   
   spdlog::info("engine start init");
 
-  
+  // create dir
   if (!FileExists(dir_) && 0 != mkdir(dir_.c_str(), 0755)) {
+    spdlog::error("init create dir[{}] fail!", dir_);
     return -1;
   }
 
   std::string fname = WALFileName(dir_);
+  // create log
+  if (!FileExists(fname)) {
+    int fd = open(fname.c_str(), O_RDWR | O_CREAT, 0644);
+    if (fd >= 0) {
+      close(fd);
+    } else {
+      spdlog::error("init create log[{}] fail!", dir_);
+      return -1;
+    }
+  }
+
   PosixSequentialFile *file = nullptr;
-  int ret = PosixEnv::NewSequentialFile(fname, &file);
+  int retry_num = 0;
+  int ret = 0;
+  while ((ret = PosixEnv::NewSequentialFile(fname, &file)) != 0) {
+    spdlog::info("open NewSequentialFile[{}] fail, retry num: {}, sleep 1s", fname, retry_num);
+    sleep(1); // sleep 1 second
+    if (retry_num == 3) {
+      break;
+    }
+    retry_num++;
+  }
   if (ret == 0) {
     // log is exist, need recovery
     Reader reader(file);

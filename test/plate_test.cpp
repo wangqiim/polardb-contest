@@ -86,7 +86,7 @@ TEST(PlateTest, openFileNum) {
     int ret = 0;
 
     Location loc;
-    int write_cnt = MINIRECORDNUM * 5;
+    int write_cnt = 100 * 5;
 
     for (int i = 0; i < write_cnt; i++) {
         int ret = plate->append(reinterpret_cast<void *>(&user), loc);
@@ -113,7 +113,7 @@ TEST(PlateTest, openFileNum) {
     EXPECT_EQ(0, reader.get_cnt());
     ret = plate->scan(read_record, reinterpret_cast<void *>(&reader));
     EXPECT_EQ(0, ret);
-    EXPECT_EQ(MINIRECORDNUM * 5, reader.get_cnt());
+    EXPECT_EQ(write_cnt, reader.get_cnt());
     EXPECT_EQ(1, plate->openFileNum());
 
     delete plate;
