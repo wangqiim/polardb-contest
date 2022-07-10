@@ -244,12 +244,14 @@ int Engine::replay_index(const std::vector<std::string> paths) {
       int fd = open(fname.c_str(), O_RDWR | O_CREAT, 0644);
       if (fd >= 0) {
         new_create = true;
+        spdlog::info("init create log[{}] success!", fname);
         close(fd);
       } else {
         spdlog::error("init create log[{}] fail!", dir_);
         return -1;
       }
     }
+    Util::print_file_size(fname);
     if (!new_create) {
       PosixSequentialFile *file = nullptr;
       int retry_num = 0;

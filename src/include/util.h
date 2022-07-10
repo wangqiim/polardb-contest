@@ -7,6 +7,9 @@
 #include <fcntl.h>
 #include <dirent.h>
 #include "spdlog/spdlog.h"
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <unistd.h>
 
 class Util {
   public:
@@ -40,6 +43,18 @@ class Util {
       long page_size_kb = sysconf(_SC_PAGE_SIZE) / 1024;
       resident_set = (double)rss * (double)page_size_kb / (1024 * 1024);
       spdlog::info("plate current process memory size: {0:f}g", resident_set);
+    }
+
+    static void print_file_size(const std::string &fname) {
+      struct stat st;
+      int ret = stat(fname.c_str(), &st);
+      if (ret != 0) {
+        spdlog::error("can't print file size: {}", fname);
+        return;
+      }
+      off_t sz = st.st_size;
+      double file_size = double(sz) / (1024 * 1024);
+      spdlog::info("{0}, size: {1:f}g", fname, file_size);
     }
 
     static bool FileExists(const std::string& path) {
