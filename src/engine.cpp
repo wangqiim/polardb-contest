@@ -114,7 +114,7 @@ int Engine::Append(const void *datas) {
 
   log_mtx_list_[log_hash_id].lock();
   log_[log_hash_id]->AddRecord(datas, RecordSize);
-  log_mtx_list_[log_hash_id].lock();
+  log_mtx_list_[log_hash_id].unlock();
 
   // build pk index
   uint32_t id1 = ((uint32_t)user->id) % ShardNum;

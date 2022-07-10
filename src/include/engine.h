@@ -14,7 +14,7 @@ using primary_key = std::unordered_map<int64_t, User>;
 using unique_key  = std::unordered_map<std::string, int64_t>;
 using normal_key  = std::multimap<int64_t, int64_t>;
 
-const int ShardNum = 25;
+const int ShardNum = 50;
 const int WALNum = 15;
 
 class Engine {
