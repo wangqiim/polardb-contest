@@ -132,13 +132,16 @@ int Engine::Init() {
     retry_num++;
   }
   if (ret == 0) {
+    int cnt = 0;
     // log is exist, need recovery
     Reader reader(file);
     std::string record;
     while (reader.ReadRecord(record, RecordSize)) {
       const User *user = (const User *)record.data();
       index_builder.build(user);
+      cnt++;
     }
+    spdlog::info("build index done, num = {}", cnt);
     delete(file);
   }
   
