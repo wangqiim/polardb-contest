@@ -119,13 +119,12 @@ int Engine::Init() {
 }
 
 int Engine::Append(const void *datas) {
-  std::lock_guard<std::mutex> lock(mtx_);
   if ((++write_cnt_) % 1 == 0) {
     spdlog::debug("[wangqiim] write {}", ((User *)datas)->to_string());
   }
-  // mtx_.lock();
+  mtx_.lock();
   log_->AddRecord(datas, RecordSize);
-  // mtx_.unlock();
+  mtx_.unlock();
   const User *user = reinterpret_cast<const User *>(datas);
   // build pk index
   uint32_t id1 = ((uint32_t)user->id) % 8;
@@ -156,7 +155,7 @@ int Engine::Append(const void *datas) {
 size_t Engine::Read(void *ctx, int32_t select_column,
     int32_t where_column, const void *column_key, 
     size_t column_key_len, void *res) {
-  std::lock_guard<std::mutex> lock(mtx_);
+  // std::lock_guard<std::mutex> lock(mtx_);
   spdlog::debug("[engine_read] [select_column:{0:d}] [where_column:{1:d}] [column_key_len:{2:d}]", select_column, where_column, column_key_len); 
   User user;
   size_t res_num = 0;
