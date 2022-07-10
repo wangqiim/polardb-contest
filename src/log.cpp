@@ -11,7 +11,12 @@ std::string WALFileName(const std::string &dir) {
 Writer::Writer(PosixWritableFile* dest) : dest_(dest) {}
 
 int Writer::AddRecord(const void* data, int len) {
-  return dest_->Append(data, len);
+  // int ret = dest_->Append(data, len);
+  // if (ret == 0) {
+  //   ret = dest_->Flush();
+  // }
+  // return ret;
+  return dest_->WriteUnbuffered((const char*)data, len);
 }
 
 PosixWritableFile* Writer::GetFile() {

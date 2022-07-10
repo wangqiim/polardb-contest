@@ -30,13 +30,13 @@ class PosixWritableFile {
   PosixWritableFile(const PosixWritableFile&) = delete;
   PosixWritableFile& operator=(const PosixWritableFile&) = delete;
 
-  int Append(const void* data, const size_t len);
+  int Append(const void* data, const size_t len); // remember flush!
   int Close();
   int Flush();
   int Sync();
+  int WriteUnbuffered(const char* data, size_t size);
  private:
- int FlushBuffer();
- int WriteUnbuffered(const char* data, size_t size);
+  int FlushBuffer();
 
   char buf_[kWritableFileBufferSize];
   size_t pos_;
