@@ -20,3 +20,31 @@ public:
 };
 
 enum Column{Id=0,Userid,Name,Salary};
+
+const int UseridLen = 128;
+
+class UserIdWrapper { // 比字符串作为key省不少空间
+public:
+  char s[UseridLen];
+  UserIdWrapper(const char *t) {
+    for (int i = 0; i < UseridLen; i++) s[i] = t[i];
+  }
+
+  bool operator== (const UserIdWrapper &other) const {
+    for (int i = 0; i < UseridLen; i++) {
+      if (s[i] != other.s[i]) {
+        return false;
+      }
+    }
+    return true;
+  }
+};
+
+namespace std {
+    template <>
+    struct hash<UserIdWrapper> {
+        size_t operator()(const UserIdWrapper &k) const{
+          return StrHash(k.s, UseridLen);
+        }
+    };
+}

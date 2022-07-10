@@ -54,7 +54,7 @@ void Index_Builder::build(const User *user) {
   idx_id_[((uint32_t)user->id) % ShardNum].insert({user->id, *user});
   // build uk index
   size_t hid = StrHash(user->user_id, sizeof(user->user_id));
-  idx_user_id_[hid % ShardNum].insert({std::string(user->user_id, sizeof(user->user_id)), user->id});
+  idx_user_id_[hid % ShardNum].insert({UserIdWrapper(user->user_id), user->id});
   // build nk index
   idx_salary_[((uint32_t)user->salary) % ShardNum].insert({user->salary,user->id});
 }
@@ -142,7 +142,7 @@ int Engine::Append(const void *datas) {
   idx_id_mtx_list_[id1].unlock();
   // build uk index
   idx_user_id_mtx_list_[id2].lock();
-  idx_user_id_list_[id2].insert({std::string(user->user_id, sizeof(user->user_id)), user->id}); // must use string(char* s, size_t n) construct funciton
+  idx_user_id_list_[id2].insert({UserIdWrapper(user->user_id), user->id}); // must use string(char* s, size_t n) construct funciton
   idx_user_id_mtx_list_[id2].unlock();
 
   // build nk index
@@ -184,11 +184,10 @@ size_t Engine::Read(void *ctx, int32_t select_column,
         if (column_key_len != 128) {
           spdlog::error("read column_key_len is: {}, expcted: 128", column_key_len);
         }
-        std::string user_id((char *)column_key, column_key_len); // todo: column_key_len is 128???
         uint32_t id2 = (StrHash((char *)column_key, column_key_len)) % ShardNum;
 
         idx_user_id_mtx_list_[id2].lock();
-        auto iter = idx_user_id_list_[id2].find(user_id);
+        auto iter = idx_user_id_list_[id2].find(UserIdWrapper((const char *)column_key));
         if (iter != idx_user_id_list_[id2].end()) {
           res_num = 1;
           int64_t id = iter->second;

@@ -6,6 +6,7 @@
 #include "interface.h"
 #include "test_util.h"
 #include "spdlog/spdlog.h"
+#include "util.h"
 
 template <typename... Args>
 void LaunchParallelTest(uint64_t num_threads, Args &&... args) {
@@ -49,6 +50,10 @@ void ReadAfterWriteHelper(void *ctx, int writeNumPerThread,
       
       read_cnt = engine_read(ctx, Id, Salary, &user.salary, 8, res);
       EXPECT_EQ(i - start + 1, read_cnt);
+      // if (i % 10000 == 0) {
+      //   spdlog::info("i = {}", i);
+      //   Util::print_resident_set_size();
+      // }
     }
     delete res;
 }
@@ -57,8 +62,8 @@ TEST(InterfaceConcurrentTest, BasicConcurrent) {
   EXPECT_EQ(0, rmtree(disk_dir));
   void* ctx = engine_init(nullptr, nullptr, 0, "/mnt/aep/", disk_dir);
 
-  int threadNum = 20;
-  int writeNumPerThread = 100;
+  int threadNum = 10;
+  int writeNumPerThread = 1000;
   LaunchParallelTest(threadNum, ReadAfterWriteHelper, ctx, writeNumPerThread);
 
   engine_deinit(ctx);
