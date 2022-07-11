@@ -48,6 +48,7 @@ class Engine {
     normal_key idx_salary_list_[ShardNum];
     
     // debug log
+    std::chrono::_V2::system_clock::time_point start_;
     int write_cnt_ = 0;
 
     int cnt1_ = 0;

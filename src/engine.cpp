@@ -71,10 +71,13 @@ Engine::~Engine() {
   }
   file_paths_.clear();
   log_.clear();
+  auto end = std::chrono::system_clock::now();
+  std::chrono::duration<double> elapsed_seconds = end-start_;
+  std::time_t end_time = std::chrono::system_clock::to_time_t(end);
+  spdlog::info("since init done, elapsed time: {}s", elapsed_seconds.count());
 }
 
 int Engine::Init() {
-  spdlog::info("engine start init");
   if (!Util::FileExists(dir_)) {
     spdlog::info("dir_: {} path is not exist, start to create it", dir_);
   }
@@ -104,6 +107,7 @@ int Engine::Init() {
   }
   Util::print_resident_set_size();
   spdlog::info("engine init done");
+  start_ = std::chrono::system_clock::now();
   return 0;
 }
 
@@ -112,9 +116,9 @@ int Engine::Append(const void *datas) {
   const User *user = reinterpret_cast<const User *>(datas);
   uint32_t log_hash_id = ((uint32_t)user->id) % WALNum;
 
-  log_mtx_list_[0].lock();
+  log_mtx_list_[log_hash_id].lock();
   log_[log_hash_id]->AddRecord(datas, RecordSize);
-  log_mtx_list_[0].unlock();
+  log_mtx_list_[log_hash_id].unlock();
 
   // build pk index
   uint32_t id1 = ((uint32_t)user->id) % ShardNum;
