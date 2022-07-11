@@ -338,7 +338,6 @@ size_t Engine::readOnly_read(void *ctx, int32_t select_column,
     int32_t where_column, const void *column_key, 
     size_t column_key_len, void *res) {
 
-  User user;
   size_t res_num = 0;
   switch(where_column) {
       case Id: {
@@ -346,8 +345,7 @@ size_t Engine::readOnly_read(void *ctx, int32_t select_column,
         auto iter = idx_id_list_[0].find(id);
         if (iter != idx_id_list_[0].end()) {
           res_num = 1;
-          user = iter->second;
-          add_res(user, select_column, &res);
+          add_res(iter->second, select_column, &res);
         }
       }
       break;
@@ -356,8 +354,13 @@ size_t Engine::readOnly_read(void *ctx, int32_t select_column,
         auto iter = idx_user_id_list_[0].find(UserIdWrapper((const char *)column_key));
         res_num = 1;
         int64_t id = iter->second;
-        user = idx_id_list_[0].find(id)->second;
-        add_res(user, select_column, &res);
+        if (select_column == Id) {
+          // 无需回表
+          memcpy(res, &id, 8); 
+          res = (char *)res + 8;      
+        } else {
+          add_res(idx_id_list_[0].find(id)->second, select_column, &res);
+        }
       } 
       break;
 
@@ -373,8 +376,12 @@ size_t Engine::readOnly_read(void *ctx, int32_t select_column,
         while (iter != range.second) {
           res_num += 1;
           int64_t id = iter->second;
-          user = idx_id_list_[0].find(id)->second;
-          add_res(user, select_column, &res);
+          if (select_column == Id) {
+            memcpy(res, &id, 8); 
+            res = (char *)res + 8;
+          } else {
+            add_res(idx_id_list_[0].find(id)->second, select_column, &res);
+          }
           iter++;
         }
       }

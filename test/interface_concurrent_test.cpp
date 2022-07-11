@@ -125,7 +125,7 @@ TEST(InterfaceConcurrentTest, WriteReadSeperateConcurrent) {
   EXPECT_EQ(0, rmtree(disk_dir));
   void* ctx = engine_init(nullptr, nullptr, 0, "/mnt/aep/", disk_dir);
 
-  int threadNum = 50;
+  int threadNum = 50; // Don't change this unless you know what you're doing
   int writeNumPerThread = 100;
   LaunchParallelTest(threadNum, WriteOnlyHelper, ctx, writeNumPerThread);
   LaunchParallelTest(threadNum, ReadOnlyHelper, ctx, writeNumPerThread);
@@ -133,5 +133,6 @@ TEST(InterfaceConcurrentTest, WriteReadSeperateConcurrent) {
   engine_init(nullptr, nullptr, 0, "/mnt/aep/", disk_dir);
   engine_deinit(ctx);
   engine_init(nullptr, nullptr, 0, "/mnt/aep/", disk_dir);
+  engine_deinit(ctx);
   EXPECT_EQ(0, rmtree(disk_dir));
 }
