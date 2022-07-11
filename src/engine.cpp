@@ -65,7 +65,7 @@ Engine::Engine(const char* disk_dir)
     idx_id_list_(), idx_user_id_list_(), idx_salary_list_() {}
 
 Engine::~Engine() {
-  for (int i = 0; i < log_.size(); i++) {
+  for (size_t i = 0; i < log_.size(); i++) {
     delete (log_[i]->GetFile());
     delete log_[i];
   }
@@ -73,7 +73,6 @@ Engine::~Engine() {
   log_.clear();
   auto end = std::chrono::system_clock::now();
   std::chrono::duration<double> elapsed_seconds = end-start_;
-  std::time_t end_time = std::chrono::system_clock::to_time_t(end);
   spdlog::info("since init done, elapsed time: {}s", elapsed_seconds.count());
 }
 
@@ -256,7 +255,6 @@ int Engine::replay_index(const std::vector<std::string> paths) {
     }
     if (!new_create) {
       PosixSequentialFile *file = nullptr;
-      int retry_num = 0;
       int ret = PosixEnv::NewSequentialFile(fname, &file);
       if (ret == 0) {
         // log is exist, need recovery
