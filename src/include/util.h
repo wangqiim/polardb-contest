@@ -21,6 +21,10 @@ class Util {
     }
 
     static void gen_sorted_paths(const std::string &dir, const std::string &fileName, std::vector<std::string> &paths, int file_num) {
+      if (paths.size() != 0) {
+        spdlog::error("call gen_sorted_paths when paths is not empty!");
+        return;
+      }
       for (int i = 0; i < file_num; i++) {
         paths.push_back(DataFileName(dir, fileName, i));
       }

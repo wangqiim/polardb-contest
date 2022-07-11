@@ -69,7 +69,6 @@ Engine::~Engine() {
     delete (log_[i]->GetFile());
     delete log_[i];
   }
-  spdlog::info("afger delete log");
   file_paths_.clear();
   log_.clear();
 }
@@ -77,7 +76,7 @@ Engine::~Engine() {
 int Engine::Init() {
   spdlog::info("engine start init");
   if (!Util::FileExists(dir_)) {
-    spdlog::info("{} path is not exist", dir_);
+    spdlog::info("dir_: {} path is not exist, start to create it", dir_);
   }
   // create dir
   if (!Util::FileExists(dir_) && 0 != mkdir(dir_.c_str(), 0755)) {
@@ -114,15 +113,6 @@ int Engine::Append(const void *datas) {
   uint32_t log_hash_id = ((uint32_t)user->id) % WALNum;
 
   log_mtx_list_[0].lock();
-  if ((++write_cnt_) % 1000000 == 0) {
-    spdlog::info("[wangqiim] write {}", write_cnt_);
-    Util::print_resident_set_size();
-  } else if (write_cnt_ > 47000000) {
-    if (write_cnt_ % 100000 == 0) {
-      spdlog::info("[wangqiim] write {}", write_cnt_);
-      Util::print_resident_set_size();
-    }
-  }
   log_[log_hash_id]->AddRecord(datas, RecordSize);
   log_mtx_list_[0].unlock();
 
@@ -260,7 +250,6 @@ int Engine::replay_index(const std::vector<std::string> paths) {
         return -1;
       }
     }
-    Util::print_file_size(fname);
     if (!new_create) {
       PosixSequentialFile *file = nullptr;
       int retry_num = 0;
