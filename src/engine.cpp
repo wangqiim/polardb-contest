@@ -55,7 +55,6 @@ void Index_Builder::build(int log_id, const User *user) {
   // build pk index
   idx_id_[log_id].insert({user->id, *user});
   // build uk index
-  size_t hid = StrHash(user->user_id, sizeof(user->user_id));
   idx_user_id_[log_id].insert({UserIdWrapper(user->user_id), user->id});
   // build nk index
   idx_salary_[log_id].insert({user->salary,user->id});
@@ -64,7 +63,7 @@ void Index_Builder::build(int log_id, const User *user) {
 // --------------------Engine-----------------------------
 Engine::Engine(const char* disk_dir)
   : next_tid_(0), mtx_(), dir_(disk_dir), log_(),
-    idx_id_list_(), idx_user_id_list_(), idx_salary_list_(), rw_seprate_(false) {}
+    idx_id_list_(), idx_user_id_list_(), idx_salary_list_(), phase_(Phase::Hybrid) {}
 
 Engine::~Engine() {
   for (size_t i = 0; i < log_.size(); i++) {
@@ -96,13 +95,22 @@ int Engine::Init() {
     spdlog::error("replay build index fail");
     return -1;
   }
-  if (record_num == 0 || record_num == 50000000) {
-    rw_seprate_ = true;
-    spdlog::info("r/w seprate mode init");
-  } else {
-    spdlog::info("r/w hybrid mode init");
-  }
   spdlog::info("replay build index done, record num = {}", record_num);
+  if (record_num == 0) {
+    phase_ = Phase::WriteOnly;
+    spdlog::info("WriteOnly mode init");
+  } else if (record_num == 50000000) {
+    phase_ = Phase::ReadOnly;
+    spdlog::info("ReadOnly mode init");
+  } else {
+    phase_ = Phase::Hybrid;
+    spdlog::info("Hybrid mode init");
+  }
+  if (phase_ == Phase::ReadOnly) {
+    spdlog::info("ReadOnly init: redo replay");
+    record_num = readOnly_replay_index(file_paths_);
+    spdlog::info("ReadOnly replay build index again, done, record num = {}", record_num);
+  }
   
   PosixWritableFile *walfile = nullptr;
   for (const auto &fname: file_paths_) {
@@ -120,7 +128,7 @@ int Engine::Init() {
 
 int Engine::Append(const void *datas) {
   must_set_tid();
-  if (!rw_seprate_) {
+  if (phase_ == Phase::Hybrid) {
     mtx_.lock();
   }
   const User *user = reinterpret_cast<const User *>(datas);
@@ -134,7 +142,7 @@ int Engine::Append(const void *datas) {
   // build nk index
   idx_salary_list_[tid_].insert({user->salary, user->id});
   
-  if (!rw_seprate_) {
+  if (phase_ == Phase::Hybrid) {
     mtx_.unlock();
   }
   return 0;
@@ -145,8 +153,10 @@ size_t Engine::Read(void *ctx, int32_t select_column,
     size_t column_key_len, void *res) {
 
   must_set_tid();
-  if (!rw_seprate_) {
+  if (phase_ == Phase::Hybrid) {
     mtx_.lock();
+  } else if (phase_ == Phase::ReadOnly) {
+    return readOnly_read(ctx, select_column, where_column, column_key, column_key_len, res);
   }
   spdlog::debug("[engine_read] [select_column:{0:d}] [where_column:{1:d}] [column_key_len:{2:d}]", select_column, where_column, column_key_len); 
   User user;
@@ -227,7 +237,7 @@ size_t Engine::Read(void *ctx, int32_t select_column,
         spdlog::error("unexpected where_column: {}", where_column);
       break;
   }
-  if (!rw_seprate_) {
+  if (phase_ == Phase::Hybrid) {
     mtx_.unlock();
   }
   return res_num;
@@ -278,3 +288,101 @@ inline int Engine::must_set_tid() {
   }
   return 0;
 } 
+
+// -------------------------------readOnly mod api-----------------------------------------
+int Engine::readOnly_replay_index(const std::vector<std::string> paths) {
+  for (auto &idx: idx_id_list_) {
+    idx.clear();
+  }
+  for (auto &idx: idx_user_id_list_) {
+    idx.clear();
+  }
+  for (auto &idx: idx_salary_list_) {
+    idx.clear();
+  }
+  Index_Builder index_builder(idx_id_list_, idx_user_id_list_, idx_salary_list_);
+  int cnt = 0;
+  for (size_t log_id = 0; log_id < paths.size(); log_id++) {
+    bool new_create = false;
+    if (!Util::FileExists(paths[log_id])) {
+      int fd = open(paths[log_id].c_str(), O_RDWR | O_CREAT, 0644);
+      if (fd >= 0) {
+        new_create = true;
+        spdlog::info("init create log[{}] success!", paths[log_id]);
+        close(fd);
+      } else {
+        spdlog::error("init create log[{}] fail!", dir_);
+        return -1;
+      }
+    }
+    if (!new_create) {
+      PosixSequentialFile *file = nullptr;
+      int ret = PosixEnv::NewSequentialFile(paths[log_id], &file);
+      if (ret == 0) {
+        // log is exist, need recovery
+        Reader reader(file);
+        std::string record;
+        while (reader.ReadRecord(record, RecordSize)) {
+          const User *user = (const User *)record.data();
+          index_builder.build(0, user); // readonly only use map[0] insteads of [0, 49]
+          cnt++;
+        }
+        delete(file);
+      }
+    }
+  }
+  return cnt;
+}
+
+size_t Engine::readOnly_read(void *ctx, int32_t select_column,
+    int32_t where_column, const void *column_key, 
+    size_t column_key_len, void *res) {
+
+  User user;
+  size_t res_num = 0;
+  switch(where_column) {
+      case Id: {
+        int64_t id = *((int64_t *)column_key);
+        auto iter = idx_id_list_[0].find(id);
+        if (iter != idx_id_list_[0].end()) {
+          res_num = 1;
+          user = iter->second;
+          add_res(user, select_column, &res);
+        }
+      }
+      break;
+
+      case Userid: {
+        auto iter = idx_user_id_list_[0].find(UserIdWrapper((const char *)column_key));
+        res_num = 1;
+        int64_t id = iter->second;
+        user = idx_id_list_[0].find(id)->second;
+        add_res(user, select_column, &res);
+      } 
+      break;
+
+      case Name: {
+        spdlog::error("don't support select where column[Name]");
+      } 
+      break;
+
+      case Salary: {
+        int64_t salary = *((int64_t *)column_key);
+        auto range = idx_salary_list_[0].equal_range(salary);
+        auto iter = range.first;
+        while (iter != range.second) {
+          res_num += 1;
+          int64_t id = iter->second;
+          user = idx_id_list_[0].find(id)->second;
+          add_res(user, select_column, &res);
+          iter++;
+        }
+      }
+      break;
+
+      default:
+        spdlog::error("unexpected where_column: {}", where_column);
+      break;
+  }
+  return res_num;
+}
