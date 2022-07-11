@@ -1,6 +1,6 @@
 #include <unordered_map>
 #include <map>
-#include <mutex>
+#include <atomic>
 #include "user.h"
 #include "log.h"
 
@@ -15,7 +15,7 @@ using unique_key  = std::unordered_map<UserIdWrapper, int64_t>;
 using normal_key  = std::multimap<int64_t, int64_t>;
 
 const int ShardNum = 50;
-const int WALNum = 15;
+const int WALNum = 50;
 
 class Engine {
   public:
@@ -32,26 +32,17 @@ class Engine {
     
   private:
     int replay_index(const std::vector<std::string> paths);
+    int must_set_tid();
+
+    std::atomic<int> next_tid_;
 
     std::vector<std::string> file_paths_;
-    std::mutex log_mtx_list_[WALNum];
     const std::string dir_;
     std::vector<Writer *> log_;
 
-    std::mutex idx_id_mtx_list_[ShardNum];
     primary_key idx_id_list_[ShardNum];
 
-    std::mutex idx_user_id_mtx_list_[ShardNum];
     unique_key idx_user_id_list_[ShardNum];
 
-    std::mutex idx_salary_mtx_list_[ShardNum];
     normal_key idx_salary_list_[ShardNum];
-    
-    // debug log
-    int write_cnt_ = 0;
-
-    int cnt1_ = 0;
-    int cnt2_ = 0;
-    int cnt3_ = 0;
-    int cnt4_ = 0;
 };

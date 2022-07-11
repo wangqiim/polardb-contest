@@ -9,6 +9,8 @@
 #include "engine.h"
 #include "util.h"
 
+thread_local int tid_ = -1;
+
 void add_res(const User &user, int32_t select_column, void **result) {
   switch(select_column) {
     case Id: 
@@ -42,26 +44,27 @@ class Index_Builder {
         idx_user_id_(idx_user_id),
         idx_salary_(idx_salary) { }
 
-    void build(const User *user);
+    // build阶段是主线程进行的,这时候没有tid,index_tid需要由对应的wal log的序号提供
+    void build(int log_id, const User *user);
 
     primary_key *idx_id_;
     unique_key  *idx_user_id_;
     normal_key  *idx_salary_;
 };
 
-void Index_Builder::build(const User *user) {
+void Index_Builder::build(int log_id, const User *user) {
   // build pk index
-  idx_id_[((uint32_t)user->id) % ShardNum].insert({user->id, *user});
+  idx_id_[log_id].insert({user->id, *user});
   // build uk index
   size_t hid = StrHash(user->user_id, sizeof(user->user_id));
-  idx_user_id_[hid % ShardNum].insert({UserIdWrapper(user->user_id), user->id});
+  idx_user_id_[log_id].insert({UserIdWrapper(user->user_id), user->id});
   // build nk index
-  idx_salary_[((uint32_t)user->salary) % ShardNum].insert({user->salary,user->id});
+  idx_salary_[log_id].insert({user->salary,user->id});
 }
 
 // --------------------Engine-----------------------------
 Engine::Engine(const char* disk_dir)
-  : dir_(disk_dir), log_(),
+  : next_tid_(0), dir_(disk_dir), log_(),
     idx_id_list_(), idx_user_id_list_(), idx_salary_list_() {}
 
 Engine::~Engine() {
@@ -108,18 +111,10 @@ int Engine::Init() {
 }
 
 int Engine::Append(const void *datas) {
-
+  must_set_tid();
   const User *user = reinterpret_cast<const User *>(datas);
-  uint32_t log_hash_id = ((uint32_t)user->id) % WALNum;
 
-  log_mtx_list_[0].lock();
-  log_[log_hash_id]->AddRecord(datas, RecordSize);
-  log_mtx_list_[0].unlock();
-
-  // build pk index
-  uint32_t id1 = ((uint32_t)user->id) % ShardNum;
-  uint32_t id2 = (StrHash(user->user_id, sizeof(user->user_id))) % ShardNum;
-  uint32_t id3 = ((uint32_t)user->salary) % ShardNum;
+  log_[tid_]->AddRecord(datas, RecordSize);
 
   //  if (idx_id_list_[hid]->count(user->id) != 0) {
 //    spdlog::error("insert dup id: {}", user->id);
@@ -127,24 +122,19 @@ int Engine::Append(const void *datas) {
 //    spdlog::error("insert dup user_id: {}", user->user_id);
 //  }
 
-  idx_id_mtx_list_[id1].lock();
-  idx_id_list_[id1].insert({user->id, *user});
-  idx_id_mtx_list_[id1].unlock();
+  idx_id_list_[tid_].insert({user->id, *user});
   // build uk index
-  idx_user_id_mtx_list_[id2].lock();
-  idx_user_id_list_[id2].insert({UserIdWrapper(user->user_id), user->id}); // must use string(char* s, size_t n) construct funciton
-  idx_user_id_mtx_list_[id2].unlock();
+  idx_user_id_list_[tid_].insert({UserIdWrapper(user->user_id), user->id}); // must use string(char* s, size_t n) construct funciton
 
   // build nk index
-  idx_salary_mtx_list_[id3].lock();
-  idx_salary_list_[id3].insert({user->salary, user->id});
-  idx_salary_mtx_list_[id3].unlock();
+  idx_salary_list_[tid_].insert({user->salary, user->id});
   return 0;
 }
 
 size_t Engine::Read(void *ctx, int32_t select_column,
     int32_t where_column, const void *column_key, 
     size_t column_key_len, void *res) {
+  must_set_tid();
   // std::lock_guard<std::mutex> lock(mtx_);
   spdlog::debug("[engine_read] [select_column:{0:d}] [where_column:{1:d}] [column_key_len:{2:d}]", select_column, where_column, column_key_len); 
   User user;
@@ -155,18 +145,12 @@ size_t Engine::Read(void *ctx, int32_t select_column,
           spdlog::error("read column_key_len is: {}, expcted: 8", column_key_len);
         }
         int64_t id = *((int64_t *)column_key);
-        uint32_t id1 = ((uint32_t)id) % ShardNum;
-        idx_id_mtx_list_[id1].lock();
-        auto iter = idx_id_list_[id1].find(id);
-        if (iter != idx_id_list_[id1].end()) {
+        auto iter = idx_id_list_[tid_].find(id);
+        if (iter != idx_id_list_[tid_].end()) {
           res_num = 1;
           user = iter->second;
           add_res(user, select_column, &res);
         }
-        if ((++cnt1_) % 1 == 0) {
-          spdlog::debug("[wangqiim] read select_column[{}], where_column[Id], user[{}]", select_column, user.to_string());
-        }
-        idx_id_mtx_list_[id1].unlock();
       }
       break;
 
@@ -174,24 +158,15 @@ size_t Engine::Read(void *ctx, int32_t select_column,
         if (column_key_len != 128) {
           spdlog::error("read column_key_len is: {}, expcted: 128", column_key_len);
         }
-        uint32_t id2 = (StrHash((char *)column_key, column_key_len)) % ShardNum;
 
-        idx_user_id_mtx_list_[id2].lock();
-        auto iter = idx_user_id_list_[id2].find(UserIdWrapper((const char *)column_key));
-        if (iter != idx_user_id_list_[id2].end()) {
+        auto iter = idx_user_id_list_[tid_].find(UserIdWrapper((const char *)column_key));
+        if (iter != idx_user_id_list_[tid_].end()) {
           res_num = 1;
           int64_t id = iter->second;
 
-          uint32_t id1 = ((uint32_t)id) % ShardNum;
-          idx_id_mtx_list_[id1].lock();
-          user = idx_id_list_[id1].find(id)->second;
-          idx_id_mtx_list_[id1].unlock();
+          user = idx_id_list_[tid_].find(id)->second;
           add_res(user, select_column, &res);
         }
-        if ((++cnt2_) % 1 == 0) {
-          spdlog::debug("[wangqiim] read select_column[{}], where_column[Userid], user[{}]", select_column, user.to_string());
-        }
-        idx_user_id_mtx_list_[id2].unlock();
       } 
       break;
 
@@ -202,28 +177,19 @@ size_t Engine::Read(void *ctx, int32_t select_column,
 
       case Salary: {
         int64_t salary = *((int64_t *)column_key);
-        if ((++cnt4_) % 1 == 0) {
-          spdlog::debug("[wangqiim] read select_column[{}], where_column[Salary = {}], writecnt = {}", select_column, salary, write_cnt_);
-        }
         if (column_key_len != 8) {
           spdlog::error("read column_key_len is: {}, expcted: 8", column_key_len);
         }
 
-        uint32_t id3 = ((uint32_t)salary) % ShardNum;
-        idx_salary_mtx_list_[id3].lock();
-        auto range = idx_salary_list_[id3].equal_range(salary);
+        auto range = idx_salary_list_[tid_].equal_range(salary);
         auto iter = range.first;
         while (iter != range.second) {
           res_num += 1;
           int64_t id = iter->second;
-          uint32_t id1 = ((uint32_t)id) % ShardNum;
-          idx_id_mtx_list_[id1].lock();
-          user = idx_id_list_[id1].find(id)->second;
-          idx_id_mtx_list_[id1].unlock();
+          user = idx_id_list_[tid_].find(id)->second;
           add_res(user, select_column, &res);
           iter++;
         }
-        idx_salary_mtx_list_[id3].unlock();
       }
       break;
 
@@ -237,13 +203,13 @@ size_t Engine::Read(void *ctx, int32_t select_column,
 int Engine::replay_index(const std::vector<std::string> paths) {
   Index_Builder index_builder(idx_id_list_, idx_user_id_list_, idx_salary_list_);
   int cnt = 0;
-  for (const auto &fname: paths) {
+  for (int log_id = 0; log_id < paths.size(); log_id++) {
     bool new_create = false;
-    if (!Util::FileExists(fname)) {
-      int fd = open(fname.c_str(), O_RDWR | O_CREAT, 0644);
+    if (!Util::FileExists(paths[log_id])) {
+      int fd = open(paths[log_id].c_str(), O_RDWR | O_CREAT, 0644);
       if (fd >= 0) {
         new_create = true;
-        spdlog::info("init create log[{}] success!", fname);
+        spdlog::debug("init create log[{}] success!", paths[log_id]);
         close(fd);
       } else {
         spdlog::error("init create log[{}] fail!", dir_);
@@ -253,14 +219,14 @@ int Engine::replay_index(const std::vector<std::string> paths) {
     if (!new_create) {
       PosixSequentialFile *file = nullptr;
       int retry_num = 0;
-      int ret = PosixEnv::NewSequentialFile(fname, &file);
+      int ret = PosixEnv::NewSequentialFile(paths[log_id], &file);
       if (ret == 0) {
         // log is exist, need recovery
         Reader reader(file);
         std::string record;
         while (reader.ReadRecord(record, RecordSize)) {
           const User *user = (const User *)record.data();
-          index_builder.build(user);
+          index_builder.build(log_id, user);
           cnt++;
         }
         delete(file);
@@ -268,4 +234,14 @@ int Engine::replay_index(const std::vector<std::string> paths) {
     }
   }
   return cnt;
+}
+
+inline int Engine::must_set_tid() {
+  if (tid_ == -1) {
+    tid_ = next_tid_.fetch_add(1);
+    if (tid_ >= 50) {
+      spdlog::error("w/r thread excceed 50!!");
+    }
+  }
+  return 0;
 }
