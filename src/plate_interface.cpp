@@ -25,7 +25,7 @@ size_t engine_read( void *ctx, int32_t select_column,
 void* engine_init(const char* host_info, const char* const* peer_host_info, size_t peer_host_info_num,
                   const char* aep_dir, const char* disk_dir) {
     spdlog::set_level(spdlog::level::info);
-    spdlog::info("[plate engine_init version[open logshard]");
+    spdlog::info("[plate engine_init version[lock free]");
     engine = new Engine(disk_dir);
     engine->Init();
     return nullptr;

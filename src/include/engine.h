@@ -3,6 +3,7 @@
 #include <mutex>
 #include "user.h"
 #include "log.h"
+#include <atomic>
 
 
 // id int64, user_id char(128), name char(128), salary int64
@@ -14,8 +15,8 @@ using primary_key = std::unordered_map<int64_t, User>;
 using unique_key  = std::unordered_map<UserIdWrapper, int64_t>;
 using normal_key  = std::multimap<int64_t, int64_t>;
 
-const int ShardNum = 50;
-const int WALNum = 50;
+const int ShardNum = 50; // 对应客户端线程数量
+const int WALNum = 50;  // 在lockfree情况下，必须ShardNum = WALNum
 
 class Engine {
   public:
@@ -32,9 +33,11 @@ class Engine {
     
   private:
     int replay_index(const std::vector<std::string> paths);
+    int must_set_tid();
 
+    std::atomic<int> next_tid_;
+    std::mutex mtx_;
     std::vector<std::string> file_paths_;
-    std::mutex log_mtx_list_[WALNum];
     const std::string dir_;
     std::vector<Writer *> log_;
 
@@ -49,10 +52,5 @@ class Engine {
     
     // debug log
     std::chrono::_V2::system_clock::time_point start_;
-    int write_cnt_ = 0;
-
-    int cnt1_ = 0;
-    int cnt2_ = 0;
-    int cnt3_ = 0;
-    int cnt4_ = 0;
+    bool rw_seprate_;
 };
