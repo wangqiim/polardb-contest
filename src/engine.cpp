@@ -89,13 +89,13 @@ int Engine::Init() {
 
   // build index
   Util::gen_sorted_paths(dir_, kWALFileName, file_paths_, WALNum);
-  spdlog::info("start replay index");
-  int record_num = replay_index(file_paths_);
+  int record_num = Util::evaluate_files_record_nums(file_paths_, RecordSize);
   if (record_num == -1) {
-    spdlog::error("replay build index fail");
+    spdlog::error("evaluate record num fail");
     return -1;
   }
-  spdlog::info("replay build index done, record num = {}", record_num);
+  // hack test phase
+  spdlog::info("evaluate record num = {}", record_num);
   if (record_num == 0) {
     phase_ = Phase::WriteOnly;
     spdlog::info("WriteOnly mode init");
@@ -106,10 +106,14 @@ int Engine::Init() {
     phase_ = Phase::Hybrid;
     spdlog::info("Hybrid mode init");
   }
-  if (phase_ == Phase::ReadOnly) {
-    spdlog::info("ReadOnly init: redo replay");
+  if (phase_ == Phase::ReadOnly) { // if is Phase::ReadOnly, only build index in one map
+    spdlog::info("ReadOnly init: start replay index");
     record_num = readOnly_replay_index(file_paths_);
-    spdlog::info("ReadOnly replay build index again, done, record num = {}", record_num);
+    spdlog::info("replay build index done, record num = {}", record_num);
+  } else {
+    spdlog::info("Hybrid/WriteOnly init: start replay index");
+    record_num = replay_index(file_paths_);
+    spdlog::info("replay build index done, record num = {}", record_num);
   }
   
   PosixWritableFile *walfile = nullptr;

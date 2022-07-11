@@ -64,4 +64,22 @@ class Util {
     static bool FileExists(const std::string& path) {
       return access(path.c_str(), F_OK) == 0;
     }
+
+    static int evaluate_files_record_nums(std::vector<std::string> &paths, int record_size) {
+      int num = 0;
+      for (const auto &fname: paths) {
+        if (!FileExists(fname)) {
+          continue;
+        }
+        struct stat st;
+        int ret = stat(fname.c_str(), &st);
+        if (ret != 0) {
+          spdlog::error("can't print file size: {}", fname);
+          return -1;
+        }
+        off_t sz = st.st_size;
+        num += int(sz) / record_size;
+      }
+      return num;
+    }
 };
