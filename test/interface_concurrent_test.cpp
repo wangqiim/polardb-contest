@@ -2,7 +2,6 @@
 #include <thread>
 #include <vector>
 #include <gtest/gtest.h>
-#include "plate.h"
 #include "interface.h"
 #include "test_util.h"
 #include "spdlog/spdlog.h"
