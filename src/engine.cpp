@@ -69,8 +69,6 @@ Engine::~Engine() {
   for (size_t i = 0; i < log_.size(); i++) {
     delete log_[i];
   }
-  file_paths_.clear();
-  log_.clear();
   auto end = std::chrono::system_clock::now();
   std::chrono::duration<double> elapsed_seconds = end-start_;
   spdlog::info("since init done, elapsed time: {}s", elapsed_seconds.count());
@@ -95,40 +93,22 @@ int Engine::Init() {
   }
 
   // build index
-  Util::gen_sorted_paths(dir_, kWALFileName, file_paths_, SSDNum);
-  Util::gen_sorted_paths(aep_dir_, kWALFileName, file_paths_, AEPNum);
-  int record_num = Util::evaluate_files_record_nums(file_paths_, RecordSize);
-  if (record_num == -1) {
-    spdlog::error("evaluate record num fail");
-    return -1;
-  }
-  // hack test phase
-  spdlog::info("evaluate record num = {}", record_num);
-  if (record_num == 0) {
-    phase_ = Phase::WriteOnly;
-    spdlog::info("WriteOnly mode init, start replay index");
-    pre_reserve(ShardNum, WritePerClient);
-    record_num = replay_index(file_paths_);
-  } else if (record_num == WritePerClient * ClientNum) { // if is Phase::ReadOnly, only build index in one map
-    phase_ = Phase::ReadOnly; 
-    spdlog::info("ReadOnly mode init, start replay index");
-    pre_reserve(1, WritePerClient * ClientNum);
-    record_num = readOnly_replay_index(file_paths_);
-  } else {
-    phase_ = Phase::Hybrid;
-    spdlog::info("Hybrid mode init, start replay index");
-    pre_reserve(ShardNum, WritePerClient);
-    record_num = replay_index(file_paths_);
-  }
+  Util::gen_sorted_paths(dir_, kWALFileName, disk_file_paths_, SSDNum);
+  Util::gen_sorted_paths(aep_dir_, kWALFileName, pmem_file_paths_, AEPNum);
+  
+  int record_num = replay_index(disk_file_paths_, pmem_file_paths_);
   spdlog::info("replay build index done, record num = {}", record_num);
   
   PosixWritableFile *walfile = nullptr;
-  for (const auto &fname: file_paths_) {
+  for (const auto &fname: disk_file_paths_) {
     int ret = PosixEnv::NewAppendableFile(fname, &walfile);
     if (ret != 0) {
       return -1;
     }
     log_.push_back(new Writer(walfile));
+  }
+  for (const auto &fname: pmem_file_paths_) {
+    // todo(wq): create pmem writer
   }
   Util::print_resident_set_size();
   spdlog::info("engine init done");
@@ -253,38 +233,64 @@ size_t Engine::Read(void *ctx, int32_t select_column,
   return res_num;
 }
 
-int Engine::replay_index(const std::vector<std::string> paths) {
-  Index_Builder index_builder(idx_id_list_, idx_user_id_list_, idx_salary_list_);
-  int cnt = 0;
-  for (size_t log_id = 0; log_id < paths.size(); log_id++) {
-    bool new_create = false;
-    if (!Util::FileExists(paths[log_id])) {
-      int fd = open(paths[log_id].c_str(), O_RDWR | O_CREAT, 0644);
-      if (fd >= 0) {
-        new_create = true;
-        spdlog::info("init create log[{}] success!", paths[log_id]);
-        close(fd);
-      } else {
-        spdlog::error("init create log[{}] fail!", dir_);
-        return -1;
+int Engine::replay_index(const std::vector<std::string> disk_path, const std::vector<std::string> pmem_path) {
+  for (auto &idx: idx_id_list_) idx.clear();
+  for (auto &idx: idx_user_id_list_) idx.clear();
+  for (auto &idx: idx_salary_list_) idx.clear();
+  // phase1: get record record_num
+  int record_num = 0;
+  size_t log_id = 0;
+  for (log_id = 0; log_id < disk_path.size(); log_id++) {
+    Util::CreateIfNotExists(disk_path[log_id]);
+    PosixSequentialFile *file = nullptr;
+    int ret = PosixEnv::NewSequentialFile(disk_path[log_id], &file);
+    if (ret == 0) {
+      // log is exist, need recovery
+      Reader reader(file); // 离开作用域时，回调用reader的析构函数, file的内存由Reader管理
+      std::string record;
+      while (reader.ReadRecord(record, RecordSize)) {
+        const User *user = (const User *)record.data();
+        record_num++;
       }
     }
-    if (!new_create) {
-      PosixSequentialFile *file = nullptr;
-      int ret = PosixEnv::NewSequentialFile(paths[log_id], &file);
-      if (ret == 0) {
-        // log is exist, need recovery
-        Reader reader(file); // 离开作用域时，回调用reader的析构函数, file的内存由Reader管理
-        std::string record;
-        while (reader.ReadRecord(record, RecordSize)) {
-          const User *user = (const User *)record.data();
+  }
+  // phase2: set phase
+  if (record_num == 0) {
+    phase_ = Phase::WriteOnly;
+    spdlog::info("WriteOnly mode init, start replay index");
+    pre_reserve_map(ShardNum, WritePerClient);
+  } else if (record_num == WritePerClient * ClientNum) { // if is Phase::ReadOnly, only build index in one map
+    phase_ = Phase::ReadOnly; 
+    spdlog::info("ReadOnly mode init, start replay index");
+    pre_reserve_map(1, WritePerClient * ClientNum);
+  } else {
+    phase_ = Phase::Hybrid;
+    spdlog::info("Hybrid mode init, start replay index");
+    pre_reserve_map(ShardNum, WritePerClient);
+  }
+
+  // phase3: build index
+  Index_Builder index_builder(idx_id_list_, idx_user_id_list_, idx_salary_list_);
+  for (log_id = 0; log_id < disk_path.size(); log_id++) {
+    Util::CreateIfNotExists(disk_path[log_id]);
+    PosixSequentialFile *file = nullptr;
+    int ret = PosixEnv::NewSequentialFile(disk_path[log_id], &file);
+    if (ret == 0) {
+      // 如果ret != 0,没有给file分配内存,因此可以让reader管理file指针的内存,reader离开作用域时，会调用reader的析构函数释放file指针的空间
+      Reader reader(file);
+      std::string record;
+      while (reader.ReadRecord(record, RecordSize)) {
+        const User *user = (const User *)record.data();
+        if (phase_ == Phase::ReadOnly) {
+          index_builder.build(0, user);
+        } else {
           index_builder.build(log_id, user);
-          cnt++;
         }
       }
     }
   }
-  return cnt;
+  // todo(wq): build from pmem
+  return record_num;
 }
 
 inline int Engine::must_set_tid() {
@@ -299,49 +305,6 @@ inline int Engine::must_set_tid() {
 } 
 
 // -------------------------------readOnly mod api-----------------------------------------
-int Engine::readOnly_replay_index(const std::vector<std::string> paths) {
-  for (auto &idx: idx_id_list_) {
-    idx.clear();
-  }
-  for (auto &idx: idx_user_id_list_) {
-    idx.clear();
-  }
-  for (auto &idx: idx_salary_list_) {
-    idx.clear();
-  }
-  Index_Builder index_builder(idx_id_list_, idx_user_id_list_, idx_salary_list_);
-  int cnt = 0;
-  for (size_t log_id = 0; log_id < paths.size(); log_id++) {
-    bool new_create = false;
-    if (!Util::FileExists(paths[log_id])) {
-      int fd = open(paths[log_id].c_str(), O_RDWR | O_CREAT, 0644);
-      if (fd >= 0) {
-        new_create = true;
-        spdlog::info("init create log[{}] success!", paths[log_id]);
-        close(fd);
-      } else {
-        spdlog::error("init create log[{}] fail!", dir_);
-        return -1;
-      }
-    }
-    if (!new_create) {
-      PosixSequentialFile *file = nullptr;
-      int ret = PosixEnv::NewSequentialFile(paths[log_id], &file);
-      if (ret == 0) {
-        // log is exist, need recovery
-        Reader reader(file);// 离开作用域时，回调用reader的析构函数, file的内存由Reader管理
-        std::string record;
-        while (reader.ReadRecord(record, RecordSize)) {
-          const User *user = (const User *)record.data();
-          index_builder.build(0, user); // readonly only use map[0] insteads of [0, 49]
-          cnt++;
-        }
-      }
-    }
-  }
-  return cnt;
-}
-
 size_t Engine::readOnly_read(void *ctx, int32_t select_column,
     int32_t where_column, const void *column_key, 
     size_t column_key_len, void *res) {
@@ -402,7 +365,7 @@ size_t Engine::readOnly_read(void *ctx, int32_t select_column,
   return res_num;
 }
 
-int Engine::pre_reserve(int n, size_t count) {
+int Engine::pre_reserve_map(int n, size_t count) {
   for (int i = 0; i < n; i++) {
     idx_id_list_[i].reserve(count);
     idx_user_id_list_[i].reserve(count);

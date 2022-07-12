@@ -61,21 +61,17 @@ class Util {
       return access(path.c_str(), F_OK) == 0;
     }
 
-    static int evaluate_files_record_nums(std::vector<std::string> &paths, int record_size) {
-      int num = 0;
-      for (const auto &fname: paths) {
-        if (!FileExists(fname)) {
-          continue;
-        }
-        struct stat st;
-        int ret = stat(fname.c_str(), &st);
-        if (ret != 0) {
-          spdlog::error("can't print file size: {}", fname);
+    static int CreateIfNotExists(const std::string& path) {
+      if (!FileExists(path)) {
+        int fd = open(path.c_str(), O_RDWR | O_CREAT, 0644);
+        if (fd >= 0) {
+          spdlog::info("init create log[{}] success!", path);
+          close(fd);
+        } else {
+          spdlog::error("init create log[{}] fail!", path);
           return -1;
         }
-        off_t sz = st.st_size;
-        num += int(sz) / record_size;
       }
-      return num;
+      return 0;
     }
 };

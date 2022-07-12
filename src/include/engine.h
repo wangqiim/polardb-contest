@@ -21,8 +21,8 @@ using normal_key  = std::multimap<int64_t, int64_t>;
 
 const int ShardNum = 50; // 对应客户端线程数量
 const int WALNum = 50;  // 在lockfree情况下，必须ShardNum = WALNum
-const int SSDNum = 48;  // 在lockfree情况下，必须ShardNum = WALNum
-const int AEPNum = 2;  // 在lockfree情况下，必须ShardNum = WALNum
+const int SSDNum = 50;  // 在lockfree情况下，必须ShardNum = WALNum
+const int AEPNum = 0;  // 在lockfree情况下，必须ShardNum = WALNum
 
 const int WritePerClient = 1000000; 
 const int ClientNum = 50;
@@ -41,21 +41,20 @@ class Engine {
       size_t column_key_len, void *res);
     
   private:
-    int replay_index(const std::vector<std::string> paths);
+    int replay_index(const std::vector<std::string> disk_path, const std::vector<std::string> pmem_path);
     int must_set_tid();
     // 为前n个map预留空间，避免插入过程中的rehash
-    int pre_reserve(int n, size_t count);
+    int pre_reserve_map(int n, size_t count);
 
     //read only mod
     size_t readOnly_read(void *ctx, int32_t select_column,
       int32_t where_column, const void *column_key, 
       size_t column_key_len, void *res);
 
-    int readOnly_replay_index(const std::vector<std::string> paths);
-
     std::atomic<int> next_tid_;
     std::mutex mtx_;
-    std::vector<std::string> file_paths_;
+    std::vector<std::string> disk_file_paths_;
+    std::vector<std::string> pmem_file_paths_;
     const std::string aep_dir_;
     const std::string dir_;
     std::vector<Writer *> log_;
