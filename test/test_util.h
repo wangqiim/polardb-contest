@@ -7,9 +7,7 @@
 #include <dirent.h>
 #include <sys/stat.h>
 #include <unistd.h>
-
 #include "const.h"
-
 
 class TestUser {
     public:
@@ -34,8 +32,7 @@ class TestUser {
 
 enum TestColumn{Id=0,Userid,Name,Salary};
 
-int drop_datafile() {
-    std::string path = disk_dir;
+int drop_datafile(std::string path) {
     if (access(path.c_str(), F_OK) == 0) { // if file exist
         return remove(path.c_str());
     }

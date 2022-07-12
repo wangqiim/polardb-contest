@@ -67,7 +67,6 @@ Engine::Engine(const char* aep_dir, const char* disk_dir)
 
 Engine::~Engine() {
   for (size_t i = 0; i < log_.size(); i++) {
-    delete (log_[i]->GetFile());
     delete log_[i];
   }
   file_paths_.clear();
@@ -275,14 +274,13 @@ int Engine::replay_index(const std::vector<std::string> paths) {
       int ret = PosixEnv::NewSequentialFile(paths[log_id], &file);
       if (ret == 0) {
         // log is exist, need recovery
-        Reader reader(file);
+        Reader reader(file); // 离开作用域时，回调用reader的析构函数, file的内存由Reader管理
         std::string record;
         while (reader.ReadRecord(record, RecordSize)) {
           const User *user = (const User *)record.data();
           index_builder.build(log_id, user);
           cnt++;
         }
-        delete(file);
       }
     }
   }
