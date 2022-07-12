@@ -329,14 +329,13 @@ int Engine::readOnly_replay_index(const std::vector<std::string> paths) {
       int ret = PosixEnv::NewSequentialFile(paths[log_id], &file);
       if (ret == 0) {
         // log is exist, need recovery
-        Reader reader(file);
+        Reader reader(file);// 离开作用域时，回调用reader的析构函数, file的内存由Reader管理
         std::string record;
         while (reader.ReadRecord(record, RecordSize)) {
           const User *user = (const User *)record.data();
           index_builder.build(0, user); // readonly only use map[0] insteads of [0, 49]
           cnt++;
         }
-        delete(file);
       }
     }
   }
