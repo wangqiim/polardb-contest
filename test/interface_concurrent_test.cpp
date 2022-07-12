@@ -105,23 +105,31 @@ void ReadOnlyHelper(void *ctx, int writeNumPerThread,
     delete res;
 }
 
-// 在读写分离(lockfree)的情况下，无法通过该测试，因为需要读取其他线程的map此时其他线程可能正在写
-// TEST(InterfaceConcurrentTest, BasicConcurrent) {
-  // EXPECT_EQ(0, rmtree(disk_dir));
-  // EXPECT_EQ(0, rmtree(aep_dir));
-//   void* ctx = engine_init(nullptr, nullptr, 0, aep_dir, disk_dir);
+// 在读写分离(lockfree)的情况下，初始时(WrteOnly阶段）先写一个record，重启进入hybrid阶段
+TEST(InterfaceConcurrentTest, BasicConcurrent) {
+  EXPECT_EQ(0, rmtree(disk_dir));
+  EXPECT_EQ(0, rmtree(aep_dir));
+  void* ctx = engine_init(nullptr, nullptr, 0, aep_dir, disk_dir);
+  TestUser user;
+  memcpy(&user.name, "won't be select", 5);
+  user.id = 2e9;
+  snprintf(user.user_id, sizeof(user.user_id), "%lld", (long long)user.id);
+  user.salary = user.id; // negtive!
+  engine_deinit(ctx);
 
-//   int threadNum = 50;
-//   int writeNumPerThread = 1000;
-//   LaunchParallelTest(threadNum, ReadAfterWriteHelper, ctx, writeNumPerThread);
+  engine_init(nullptr, nullptr, 0, aep_dir, disk_dir);
 
-//   engine_deinit(ctx);
-//   engine_init(nullptr, nullptr, 0, aep_dir, disk_dir);
-//   engine_deinit(ctx);
-//   engine_init(nullptr, nullptr, 0, aep_dir, disk_dir);
-  // EXPECT_EQ(0, rmtree(disk_dir));
-  // EXPECT_EQ(0, rmtree(aep_dir));
-// }
+  int threadNum = 50;
+  int writeNumPerThread = 1000;
+  LaunchParallelTest(threadNum, ReadAfterWriteHelper, ctx, writeNumPerThread);
+
+  engine_deinit(ctx);
+  engine_init(nullptr, nullptr, 0, aep_dir, disk_dir);
+  engine_deinit(ctx);
+  engine_init(nullptr, nullptr, 0, aep_dir, disk_dir);
+  EXPECT_EQ(0, rmtree(disk_dir));
+  EXPECT_EQ(0, rmtree(aep_dir));
+}
 
 TEST(InterfaceConcurrentTest, WriteReadSeperateConcurrent) {
   EXPECT_EQ(0, rmtree(disk_dir));

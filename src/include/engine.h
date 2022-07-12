@@ -51,13 +51,15 @@ class Engine {
       int32_t where_column, const void *column_key, 
       size_t column_key_len, void *res);
 
+  private:
     std::atomic<int> next_tid_;
     std::mutex mtx_;
     std::vector<std::string> disk_file_paths_;
     std::vector<std::string> pmem_file_paths_;
     const std::string aep_dir_;
     const std::string dir_;
-    std::vector<Writer *> log_;
+    std::vector<Writer *> disk_logs_;
+    std::vector<PmemWriter *> pmem_logs_;
 
     primary_key idx_id_list_[ShardNum];
 

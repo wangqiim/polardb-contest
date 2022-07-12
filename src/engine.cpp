@@ -36,38 +36,60 @@ void add_res(const User &user, int32_t select_column, void **result) {
 }
 
 // ------Index Builder-------------
-class Index_Builder {
+class Index_Helper {
   public:
-    Index_Builder(primary_key *idx_id,
+    Index_Helper(bool is_build, primary_key *idx_id,
       unique_key *idx_user_id, normal_key  *idx_salary)
-      : idx_id_(idx_id),
+      : count_(0), is_build_(is_build), 
+        log_id_(-1), idx_id_(idx_id),
         idx_user_id_(idx_user_id),
         idx_salary_(idx_salary) { }
 
-    void build(int log_id, const User *user);
+    // 当is_build为false时，仅仅记录count_，不build索引
+    void Scan(const User *user);
+
+    void Set_log_id(int log_id) { log_id_ = log_id; }
+    int Get_count() { return count_; }
+
+  private:
+    int  count_;
+    bool is_build_;
+    int  log_id_;
 
     primary_key *idx_id_;
     unique_key  *idx_user_id_;
     normal_key  *idx_salary_;
 };
 
-void Index_Builder::build(int log_id, const User *user) {
-  // build pk index
-  idx_id_[log_id].insert({user->id, *user});
-  // build uk index
-  idx_user_id_[log_id].insert({UserIdWrapper(user->user_id), user->id});
-  // build nk index
-  idx_salary_[log_id].insert({user->salary,user->id});
+void Index_Helper::Scan(const User *user) {
+  if (is_build_) {
+    // build pk index
+    idx_id_[log_id_].insert({user->id, *user});
+    // build uk index
+    idx_user_id_[log_id_].insert({UserIdWrapper(user->user_id), user->id});
+    // build nk index
+    idx_salary_[log_id_].insert({user->salary,user->id});
+  }
+  count_++;
+}
+
+void record_scan(const char *record, void *context) {
+  const User *user = reinterpret_cast<const User *>(record);
+  Index_Helper *helper = reinterpret_cast<Index_Helper *>(context);
+  helper->Scan(user);
 }
 
 // --------------------Engine-----------------------------
 Engine::Engine(const char* aep_dir, const char* disk_dir)
-  : next_tid_(0), mtx_(), aep_dir_(aep_dir), dir_(disk_dir), log_(),
+  : next_tid_(0), mtx_(), aep_dir_(aep_dir), dir_(disk_dir), disk_logs_(), pmem_logs_(),
     idx_id_list_(), idx_user_id_list_(), idx_salary_list_(), phase_(Phase::Hybrid) {}
 
 Engine::~Engine() {
-  for (size_t i = 0; i < log_.size(); i++) {
-    delete log_[i];
+  for (size_t i = 0; i < disk_logs_.size(); i++) {
+    delete disk_logs_[i];
+  }
+  for (size_t i = 0; i < pmem_logs_.size(); i++) {
+    delete pmem_logs_[i];
   }
   auto end = std::chrono::system_clock::now();
   std::chrono::duration<double> elapsed_seconds = end-start_;
@@ -105,10 +127,10 @@ int Engine::Init() {
     if (ret != 0) {
       return -1;
     }
-    log_.push_back(new Writer(walfile));
+    disk_logs_.push_back(new Writer(walfile));
   }
   for (const auto &fname: pmem_file_paths_) {
-    // todo(wq): create pmem writer
+    pmem_logs_.push_back(new PmemWriter(fname, PoolSize));
   }
   Util::print_resident_set_size();
   spdlog::info("engine init done");
@@ -123,7 +145,11 @@ int Engine::Append(const void *datas) {
   }
   const User *user = reinterpret_cast<const User *>(datas);
 
-  log_[tid_]->AddRecord(datas, RecordSize);
+  if (tid_ < SSDNum) {
+    disk_logs_[tid_]->AddRecord(datas, RecordSize);
+  } else {
+    pmem_logs_[tid_ - SSDNum]->Append(datas, RecordSize);
+  }
 
   idx_id_list_[tid_].insert({user->id, *user});
   // build uk index
@@ -237,9 +263,9 @@ int Engine::replay_index(const std::vector<std::string> disk_path, const std::ve
   for (auto &idx: idx_id_list_) idx.clear();
   for (auto &idx: idx_user_id_list_) idx.clear();
   for (auto &idx: idx_salary_list_) idx.clear();
-  // phase1: get record record_num
-  int record_num = 0;
+  // phase1: get record record_num from disk_path and pmem_path
   size_t log_id = 0;
+  Index_Helper index_scanner(false, idx_id_list_, idx_user_id_list_, idx_salary_list_);
   for (log_id = 0; log_id < disk_path.size(); log_id++) {
     Util::CreateIfNotExists(disk_path[log_id]);
     PosixSequentialFile *file = nullptr;
@@ -250,27 +276,34 @@ int Engine::replay_index(const std::vector<std::string> disk_path, const std::ve
       std::string record;
       while (reader.ReadRecord(record, RecordSize)) {
         const User *user = (const User *)record.data();
-        record_num++;
+        index_scanner.Scan(user);
       }
     }
   }
+  for (log_id = 0; log_id < pmem_path.size(); log_id++) {
+    PmemReader reader = PmemReader(pmem_path[log_id], PoolSize);
+    reader.Scan(record_scan, &index_scanner);
+  }
+  int record_num = index_scanner.Get_count();
+  spdlog::info("replay scan record done, record num = {}", record_num);
+
   // phase2: set phase
   if (record_num == 0) {
     phase_ = Phase::WriteOnly;
-    spdlog::info("WriteOnly mode init, start replay index");
+    spdlog::info("WriteOnly mode replay, start build index");
     pre_reserve_map(ShardNum, WritePerClient);
   } else if (record_num == WritePerClient * ClientNum) { // if is Phase::ReadOnly, only build index in one map
     phase_ = Phase::ReadOnly; 
-    spdlog::info("ReadOnly mode init, start replay index");
+    spdlog::info("ReadOnly mode replay, only build one map, start build index");
     pre_reserve_map(1, WritePerClient * ClientNum);
   } else {
     phase_ = Phase::Hybrid;
-    spdlog::info("Hybrid mode init, start replay index");
+    spdlog::info("Hybrid mode replay, start build index");
     pre_reserve_map(ShardNum, WritePerClient);
   }
 
   // phase3: build index
-  Index_Builder index_builder(idx_id_list_, idx_user_id_list_, idx_salary_list_);
+  Index_Helper index_builder(true, idx_id_list_, idx_user_id_list_, idx_salary_list_);
   for (log_id = 0; log_id < disk_path.size(); log_id++) {
     Util::CreateIfNotExists(disk_path[log_id]);
     PosixSequentialFile *file = nullptr;
@@ -282,14 +315,23 @@ int Engine::replay_index(const std::vector<std::string> disk_path, const std::ve
       while (reader.ReadRecord(record, RecordSize)) {
         const User *user = (const User *)record.data();
         if (phase_ == Phase::ReadOnly) {
-          index_builder.build(0, user);
+          index_builder.Set_log_id(0);
         } else {
-          index_builder.build(log_id, user);
+          index_builder.Set_log_id(log_id);
         }
+        index_builder.Scan(user);
       }
     }
   }
-  // todo(wq): build from pmem
+  for (log_id = 0; log_id < pmem_path.size(); log_id++) {
+    PmemReader reader = PmemReader(pmem_path[log_id], PoolSize);
+    if (phase_ == Phase::ReadOnly) {
+      index_builder.Set_log_id(0);
+    } else {
+      index_builder.Set_log_id(log_id + disk_path.size());
+    }
+    reader.Scan(record_scan, &index_builder);
+  }
   return record_num;
 }
 
