@@ -98,23 +98,21 @@ int Engine::Init() {
   spdlog::info("evaluate record num = {}", record_num);
   if (record_num == 0) {
     phase_ = Phase::WriteOnly;
-    spdlog::info("WriteOnly mode init");
-  } else if (record_num == 50000000) {
-    phase_ = Phase::ReadOnly;
-    spdlog::info("ReadOnly mode init");
+    spdlog::info("WriteOnly mode init, start replay index");
+    pre_reserve(ShardNum, WritePerClient);
+    record_num = replay_index(file_paths_);
+  } else if (record_num == WritePerClient * ClientNum) { // if is Phase::ReadOnly, only build index in one map
+    phase_ = Phase::ReadOnly; 
+    spdlog::info("ReadOnly mode init, start replay index");
+    pre_reserve(1, WritePerClient * ClientNum);
+    record_num = readOnly_replay_index(file_paths_);
   } else {
     phase_ = Phase::Hybrid;
-    spdlog::info("Hybrid mode init");
-  }
-  if (phase_ == Phase::ReadOnly) { // if is Phase::ReadOnly, only build index in one map
-    spdlog::info("ReadOnly init: start replay index");
-    record_num = readOnly_replay_index(file_paths_);
-    spdlog::info("replay build index done, record num = {}", record_num);
-  } else {
-    spdlog::info("Hybrid/WriteOnly init: start replay index");
+    spdlog::info("Hybrid mode init, start replay index");
+    pre_reserve(ShardNum, WritePerClient);
     record_num = replay_index(file_paths_);
-    spdlog::info("replay build index done, record num = {}", record_num);
   }
+  spdlog::info("replay build index done, record num = {}", record_num);
   
   PosixWritableFile *walfile = nullptr;
   for (const auto &fname: file_paths_) {
@@ -141,7 +139,7 @@ int Engine::Append(const void *datas) {
 
   idx_id_list_[tid_].insert({user->id, *user});
   // build uk index
-  idx_user_id_list_[tid_].insert({UserIdWrapper(user->user_id), user->id}); // must use string(char* s, size_t n) construct funciton
+  idx_user_id_list_[tid_].emplace(user->user_id, user->id); // avoid unneccessary copy constructer
 
   // build nk index
   idx_salary_list_[tid_].insert({user->salary, user->id});
@@ -396,4 +394,11 @@ size_t Engine::readOnly_read(void *ctx, int32_t select_column,
       break;
   }
   return res_num;
+}
+
+int Engine::pre_reserve(int n, size_t count) {
+  for (int i = 0; i < n; i++) {
+    idx_id_list_[i].reserve(count);
+    idx_user_id_list_[i].reserve(count);
+  }
 }

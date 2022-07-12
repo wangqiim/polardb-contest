@@ -22,6 +22,9 @@ using normal_key  = std::multimap<int64_t, int64_t>;
 const int ShardNum = 50; // 对应客户端线程数量
 const int WALNum = 50;  // 在lockfree情况下，必须ShardNum = WALNum
 
+const int WritePerClient = 1000000; 
+const int ClientNum = 50;
+
 class Engine {
   public:
     Engine(const char* disk_dir);
@@ -38,6 +41,8 @@ class Engine {
   private:
     int replay_index(const std::vector<std::string> paths);
     int must_set_tid();
+    // 为前n个map预留空间，避免插入过程中的rehash
+    int pre_reserve(int n, size_t count);
 
     //read only mod
     size_t readOnly_read(void *ctx, int32_t select_column,
