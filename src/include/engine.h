@@ -21,8 +21,8 @@ using normal_key  = std::multimap<int64_t, int64_t>;
 
 const int ShardNum = 50; // 对应客户端线程数量
 const int WALNum = 50;  // 在lockfree情况下，必须ShardNum = WALNum
-const int SSDNum = 50;  // 在lockfree情况下，必须ShardNum = WALNum
-const int AEPNum = 0;  // 在lockfree情况下，必须ShardNum = WALNum
+const int SSDNum = 0;  // 在lockfree情况下，必须ShardNum = WALNum
+const int AEPNum = 50;  // 在lockfree情况下，必须ShardNum = WALNum
 
 const int WritePerClient = 1000000; 
 const int ClientNum = 50;
