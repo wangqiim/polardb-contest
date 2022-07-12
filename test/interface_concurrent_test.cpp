@@ -107,32 +107,36 @@ void ReadOnlyHelper(void *ctx, int writeNumPerThread,
 
 // 在读写分离(lockfree)的情况下，无法通过该测试，因为需要读取其他线程的map此时其他线程可能正在写
 // TEST(InterfaceConcurrentTest, BasicConcurrent) {
-//   EXPECT_EQ(0, rmtree(disk_dir));
-//   void* ctx = engine_init(nullptr, nullptr, 0, "/mnt/aep/", disk_dir);
+  // EXPECT_EQ(0, rmtree(disk_dir));
+  // EXPECT_EQ(0, rmtree(aep_dir));
+//   void* ctx = engine_init(nullptr, nullptr, 0, aep_dir, disk_dir);
 
 //   int threadNum = 50;
 //   int writeNumPerThread = 1000;
 //   LaunchParallelTest(threadNum, ReadAfterWriteHelper, ctx, writeNumPerThread);
 
 //   engine_deinit(ctx);
-//   engine_init(nullptr, nullptr, 0, "/mnt/aep/", disk_dir);
+//   engine_init(nullptr, nullptr, 0, aep_dir, disk_dir);
 //   engine_deinit(ctx);
-//   engine_init(nullptr, nullptr, 0, "/mnt/aep/", disk_dir);
-//   EXPECT_EQ(0, rmtree(disk_dir));
+//   engine_init(nullptr, nullptr, 0, aep_dir, disk_dir);
+  // EXPECT_EQ(0, rmtree(disk_dir));
+  // EXPECT_EQ(0, rmtree(aep_dir));
 // }
 
 TEST(InterfaceConcurrentTest, WriteReadSeperateConcurrent) {
   EXPECT_EQ(0, rmtree(disk_dir));
-  void* ctx = engine_init(nullptr, nullptr, 0, "/mnt/aep/", disk_dir);
+  EXPECT_EQ(0, rmtree(aep_dir));
+  void* ctx = engine_init(nullptr, nullptr, 0, aep_dir, disk_dir);
 
-  int threadNum = 50; // Don't change this unless you know what you're doing
+  int threadNum = 10; // Don't change this unless you know what you're doing
   int writeNumPerThread = 100;
   LaunchParallelTest(threadNum, WriteOnlyHelper, ctx, writeNumPerThread);
   LaunchParallelTest(threadNum, ReadOnlyHelper, ctx, writeNumPerThread);
   engine_deinit(ctx);
-  engine_init(nullptr, nullptr, 0, "/mnt/aep/", disk_dir);
+  engine_init(nullptr, nullptr, 0, aep_dir, disk_dir);
   engine_deinit(ctx);
-  engine_init(nullptr, nullptr, 0, "/mnt/aep/", disk_dir);
+  engine_init(nullptr, nullptr, 0, aep_dir, disk_dir);
   engine_deinit(ctx);
   EXPECT_EQ(0, rmtree(disk_dir));
+  EXPECT_EQ(0, rmtree(aep_dir));
 }

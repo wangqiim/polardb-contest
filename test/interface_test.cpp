@@ -5,11 +5,12 @@
 
 TEST(InterfaceTest, Basic) {
     EXPECT_EQ(0, rmtree(disk_dir));
+    EXPECT_EQ(0, rmtree(aep_dir));
     TestUser user;
     user.id = 0;
     user.salary = 100;
     memcpy(&user.name,"hello",5);
-    void* ctx = engine_init(nullptr, nullptr, 0, "/mnt/aep/", disk_dir);
+    void* ctx = engine_init(nullptr, nullptr, 0, aep_dir, disk_dir);
     engine_write(ctx,&user,sizeof(user));
     char res[100*128];
     size_t read_cnt = engine_read(ctx, Id, Userid, &user.user_id, 128, res);
@@ -19,10 +20,12 @@ TEST(InterfaceTest, Basic) {
     
     engine_deinit(ctx);
     EXPECT_EQ(0, rmtree(disk_dir));
+    EXPECT_EQ(0, rmtree(aep_dir));
 }
 
 TEST(InterfaceTest, ManyUser) {
     EXPECT_EQ(0, rmtree(disk_dir));
+    EXPECT_EQ(0, rmtree(aep_dir));
     // user1 user2 salary 相同
     // user2 user3 user4 name 相同
     TestUser user1;
@@ -55,7 +58,7 @@ TEST(InterfaceTest, ManyUser) {
     memcpy(&user5.name, "name5", 5);
     user5.salary = 5;
 
-    void* ctx = engine_init(nullptr, nullptr, 0, "/mnt/aep/", disk_dir);
+    void* ctx = engine_init(nullptr, nullptr, 0, aep_dir, disk_dir);
 
     engine_write(ctx,&user1,sizeof(user1));
     engine_write(ctx,&user2,sizeof(user2));
@@ -75,10 +78,12 @@ TEST(InterfaceTest, ManyUser) {
 
     engine_deinit(ctx);
     EXPECT_EQ(0, rmtree(disk_dir));
+    EXPECT_EQ(0, rmtree(aep_dir));
 }
 
 TEST(InterfaceTest, BasicReplay) {
     EXPECT_EQ(0, rmtree(disk_dir));
+    EXPECT_EQ(0, rmtree(aep_dir));
     TestUser user1;
     user1.id = 1;
     memcpy(&user1.user_id, "user1", 5);
@@ -103,7 +108,7 @@ TEST(InterfaceTest, BasicReplay) {
     memcpy(&user4.name, "name2", 5);
     user4.salary = 4;
 
-    void* ctx = engine_init(nullptr, nullptr, 0, "/mnt/aep/", disk_dir);
+    void* ctx = engine_init(nullptr, nullptr, 0, aep_dir, disk_dir);
 
     engine_write(ctx,&user1,sizeof(user1));
     engine_write(ctx,&user2,sizeof(user2));
@@ -116,7 +121,7 @@ TEST(InterfaceTest, BasicReplay) {
 
     engine_deinit(ctx);
     // replay
-    ctx = engine_init(nullptr, nullptr, 0, "/mnt/aep/", disk_dir);
+    ctx = engine_init(nullptr, nullptr, 0, aep_dir, disk_dir);
     read_cnt = engine_read(ctx, Id, Salary, &user1.salary, 8, res);
     EXPECT_EQ(2, read_cnt);
     
@@ -132,17 +137,19 @@ TEST(InterfaceTest, BasicReplay) {
 
     engine_deinit(ctx);
     EXPECT_EQ(0, rmtree(disk_dir));
+    EXPECT_EQ(0, rmtree(aep_dir));
 }
 
 TEST(InterfaceTest, ManyWrite) {
     EXPECT_EQ(0, rmtree(disk_dir));
+    EXPECT_EQ(0, rmtree(aep_dir));
     // user1 user2 salary 相同
     // user2 user3 user4 name 相同
     TestUser user1;
     memcpy(&user1.name, "name", 5);
     user1.salary = 2;
 
-    void* ctx = engine_init(nullptr, nullptr, 0, "/mnt/aep/", disk_dir);
+    void* ctx = engine_init(nullptr, nullptr, 0, aep_dir, disk_dir);
 
     int write_cnt = 10000;
     for (int i = 0; i < write_cnt; i++) {
@@ -157,18 +164,20 @@ TEST(InterfaceTest, ManyWrite) {
 
     engine_deinit(ctx);
     EXPECT_EQ(0, rmtree(disk_dir));
+    EXPECT_EQ(0, rmtree(aep_dir));
     delete[] res;
 }
 
 TEST(InterfaceTest, ManyWriteReplay) {
     EXPECT_EQ(0, rmtree(disk_dir));
+    EXPECT_EQ(0, rmtree(aep_dir));
     // user1 user2 salary 相同
     // user2 user3 user4 name 相同
     TestUser user1;
     memcpy(&user1.name, "name1", 5);
     user1.salary = 2;
 
-    void* ctx = engine_init(nullptr, nullptr, 0, "/mnt/aep/", disk_dir);
+    void* ctx = engine_init(nullptr, nullptr, 0, aep_dir, disk_dir);
 
     int write_cnt = 10000;
     for (int i = 0; i < write_cnt; i++) {
@@ -183,7 +192,7 @@ TEST(InterfaceTest, ManyWriteReplay) {
 
     engine_deinit(ctx);
 
-    ctx = engine_init(nullptr, nullptr, 0, "/mnt/aep/", disk_dir);
+    ctx = engine_init(nullptr, nullptr, 0, aep_dir, disk_dir);
     read_cnt = engine_read(ctx, Id, Salary, &user1.salary, 8, res);
     EXPECT_EQ(write_cnt, read_cnt);
 
@@ -195,11 +204,13 @@ TEST(InterfaceTest, ManyWriteReplay) {
 
     engine_deinit(ctx);
     EXPECT_EQ(0, rmtree(disk_dir));
+    EXPECT_EQ(0, rmtree(aep_dir));
     delete res;
 }
 
 TEST(InterfaceTest, ReadUserIdReplay) {
     EXPECT_EQ(0, rmtree(disk_dir));
+    EXPECT_EQ(0, rmtree(aep_dir));
     // user1 user2 salary 相同
     // user2 user3 user4 name 相同
     TestUser user1;
@@ -215,7 +226,7 @@ TEST(InterfaceTest, ReadUserIdReplay) {
     memcpy(&user2.name, "name2", 5);
     user2.salary = 2;
 
-    void* ctx = engine_init(nullptr, nullptr, 0, "/mnt/aep/", disk_dir);
+    void* ctx = engine_init(nullptr, nullptr, 0, aep_dir, disk_dir);
 
     engine_write(ctx, &user1, sizeof(user1));
     engine_write(ctx, &user2, sizeof(user1));
@@ -229,7 +240,7 @@ TEST(InterfaceTest, ReadUserIdReplay) {
     engine_deinit(ctx);
 
     // replay
-    ctx = engine_init(nullptr, nullptr, 0, "/mnt/aep/", disk_dir);
+    ctx = engine_init(nullptr, nullptr, 0, aep_dir, disk_dir);
     
     read_cnt = engine_read(ctx, Id, Userid, &user1.user_id, 128, res);
     EXPECT_EQ(1, read_cnt);
@@ -244,5 +255,6 @@ TEST(InterfaceTest, ReadUserIdReplay) {
 
     engine_deinit(ctx);
     EXPECT_EQ(0, rmtree(disk_dir));
+    EXPECT_EQ(0, rmtree(aep_dir));
     delete res;
 }

@@ -61,8 +61,8 @@ void Index_Builder::build(int log_id, const User *user) {
 }
 
 // --------------------Engine-----------------------------
-Engine::Engine(const char* disk_dir)
-  : next_tid_(0), mtx_(), dir_(disk_dir), log_(),
+Engine::Engine(const char* aep_dir, const char* disk_dir)
+  : next_tid_(0), mtx_(), aep_dir_(aep_dir), dir_(disk_dir), log_(),
     idx_id_list_(), idx_user_id_list_(), idx_salary_list_(), phase_(Phase::Hybrid) {}
 
 Engine::~Engine() {
@@ -78,6 +78,14 @@ Engine::~Engine() {
 }
 
 int Engine::Init() {
+  if (!Util::FileExists(aep_dir_)) {
+    spdlog::info("aep_dir_: {} path is not exist, start to create it", aep_dir_);
+  }
+  // create dir
+  if (!Util::FileExists(aep_dir_) && 0 != mkdir(aep_dir_.c_str(), 0755)) {
+    spdlog::error("init create dir[{}] fail!", aep_dir_);
+    return -1;
+  }
   if (!Util::FileExists(dir_)) {
     spdlog::info("dir_: {} path is not exist, start to create it", dir_);
   }
@@ -88,7 +96,8 @@ int Engine::Init() {
   }
 
   // build index
-  Util::gen_sorted_paths(dir_, kWALFileName, file_paths_, WALNum);
+  Util::gen_sorted_paths(dir_, kWALFileName, file_paths_, SSDNum);
+  Util::gen_sorted_paths(aep_dir_, kWALFileName, file_paths_, AEPNum);
   int record_num = Util::evaluate_files_record_nums(file_paths_, RecordSize);
   if (record_num == -1) {
     spdlog::error("evaluate record num fail");
@@ -401,4 +410,5 @@ int Engine::pre_reserve(int n, size_t count) {
     idx_id_list_[i].reserve(count);
     idx_user_id_list_[i].reserve(count);
   }
+  return 0;
 }

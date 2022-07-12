@@ -21,13 +21,15 @@ using normal_key  = std::multimap<int64_t, int64_t>;
 
 const int ShardNum = 50; // 对应客户端线程数量
 const int WALNum = 50;  // 在lockfree情况下，必须ShardNum = WALNum
+const int SSDNum = 48;  // 在lockfree情况下，必须ShardNum = WALNum
+const int AEPNum = 2;  // 在lockfree情况下，必须ShardNum = WALNum
 
 const int WritePerClient = 1000000; 
 const int ClientNum = 50;
 
 class Engine {
   public:
-    Engine(const char* disk_dir);
+    Engine(const char* aep_dir, const char* disk_dir);
     ~Engine();
 
     int Init();
@@ -54,6 +56,7 @@ class Engine {
     std::atomic<int> next_tid_;
     std::mutex mtx_;
     std::vector<std::string> file_paths_;
+    const std::string aep_dir_;
     const std::string dir_;
     std::vector<Writer *> log_;
 
