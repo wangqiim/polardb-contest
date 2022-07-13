@@ -180,7 +180,6 @@ size_t Engine::Read(void *ctx, int32_t select_column,
   if (phase_ == Phase::Hybrid) {
     mtx_.lock();
   } else if (phase_ == Phase::ReadOnly) {
-    exit(1);
     return readOnly_read(ctx, select_column, where_column, column_key, column_key_len, res);
   }
   spdlog::debug("[engine_read] [select_column:{0:d}] [where_column:{1:d}] [column_key_len:{2:d}]", select_column, where_column, column_key_len); 
