@@ -152,7 +152,7 @@ int Engine::Append(const void *datas) {
     pmem_logs_[tid_ - SSDNum]->Append(datas, RecordSize);
   }
   append_num++;
-  if (phase_ == Phase::WriteOnly && append_num >= 500000) {
+  if (phase_ == Phase::WriteOnly && append_num >= 200000) {
     // don't build index after 10W append
   } else {
     idx_id_list_[tid_].insert({user->id, *user});
