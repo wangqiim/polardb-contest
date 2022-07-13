@@ -10,6 +10,7 @@
 #include "util.h"
 
 thread_local int tid_ = -1;
+thread_local int append_num = 0;
 
 void add_res(const User &user, int32_t select_column, void **result) {
   switch(select_column) {
@@ -151,15 +152,20 @@ int Engine::Append(const void *datas) {
     pmem_logs_[tid_ - SSDNum]->Append(datas, RecordSize);
   }
 
-  idx_id_list_[tid_].insert({user->id, *user});
-  // build uk index
-  idx_user_id_list_[tid_].emplace(user->user_id, user->id); // avoid unneccessary copy constructer
+  if (phase_ == Phase::Hybrid) {
+    idx_id_list_[tid_].insert({user->id, *user});
+    // build uk index
+    idx_user_id_list_[tid_].emplace(user->user_id, user->id); // avoid unneccessary copy constructer
 
-  // build nk index
-  idx_salary_list_[tid_].insert({user->salary, user->id});
-  
+    // build nk index
+    idx_salary_list_[tid_].insert({user->salary, user->id});
+  }
+
   if (phase_ == Phase::Hybrid) {
     mtx_.unlock();
+  }
+  if (++append_num == WritePerClient) {
+    spdlog::info("tid[], have write {} logs", WritePerClient);
   }
   return 0;
 }
@@ -172,7 +178,10 @@ size_t Engine::Read(void *ctx, int32_t select_column,
   if (phase_ == Phase::Hybrid) {
     mtx_.lock();
   } else if (phase_ == Phase::ReadOnly) {
+    exit(1);
     return readOnly_read(ctx, select_column, where_column, column_key, column_key_len, res);
+  } else { // WrteOnly
+    exit(1);
   }
   spdlog::debug("[engine_read] [select_column:{0:d}] [where_column:{1:d}] [column_key_len:{2:d}]", select_column, where_column, column_key_len); 
   User user;
