@@ -151,8 +151,10 @@ int Engine::Append(const void *datas) {
   } else {
     pmem_logs_[tid_ - SSDNum]->Append(datas, RecordSize);
   }
-
-  if (phase_ == Phase::Hybrid) {
+  append_num++;
+  if (phase_ == Phase::WriteOnly && append_num >= 500000) {
+    // don't build index after 10W append
+  } else {
     idx_id_list_[tid_].insert({user->id, *user});
     // build uk index
     idx_user_id_list_[tid_].emplace(user->user_id, user->id); // avoid unneccessary copy constructer
@@ -164,8 +166,8 @@ int Engine::Append(const void *datas) {
   if (phase_ == Phase::Hybrid) {
     mtx_.unlock();
   }
-  if (++append_num == WritePerClient) {
-    spdlog::info("tid[], have write {} logs", WritePerClient);
+  if (append_num == WritePerClient) {
+    spdlog::info("tid[{}], have write {} logs", tid_, WritePerClient);
   }
   return 0;
 }
@@ -180,8 +182,6 @@ size_t Engine::Read(void *ctx, int32_t select_column,
   } else if (phase_ == Phase::ReadOnly) {
     exit(1);
     return readOnly_read(ctx, select_column, where_column, column_key, column_key_len, res);
-  } else { // WrteOnly
-    exit(1);
   }
   spdlog::debug("[engine_read] [select_column:{0:d}] [where_column:{1:d}] [column_key_len:{2:d}]", select_column, where_column, column_key_len); 
   User user;
