@@ -217,9 +217,6 @@ size_t Engine::Read(void *ctx, int32_t select_column,
   size_t res_num = 0;
   switch(where_column) {
       case Id: {
-        if (column_key_len != 8) {
-          spdlog::error("read column_key_len is: {}, expcted: 8", column_key_len);
-        }
         int64_t id = *((int64_t *)column_key);
         auto iter = idx_id_.find(id);
         if (iter != idx_id_.end()) {
@@ -230,16 +227,15 @@ size_t Engine::Read(void *ctx, int32_t select_column,
       break;
 
       case Userid: {
-        if (column_key_len != 128) {
-          spdlog::error("read column_key_len is: {}, expcted: 128", column_key_len);
-        }
         auto iter = idx_user_id_.find(UserIdWrapper((const char *)column_key));
         if (iter != idx_user_id_.end()) {
           int64_t id = iter->second;
-          auto iter_id = idx_id_.find(id);
-          if (iter_id != idx_id_.end()) {
-            res_num = 1;
-            add_res(iter_id->second, select_column, &res);
+          res_num = 1;
+          if (select_column == Id) { // 无需回表
+            memcpy(res, &id, 8); 
+            res = (char *)res + 8;      
+          } else {
+            add_res(idx_id_.find(id)->second, select_column, &res);
           }
         }
       } 
@@ -252,17 +248,16 @@ size_t Engine::Read(void *ctx, int32_t select_column,
 
       case Salary: {
         int64_t salary = *((int64_t *)column_key);
-        if (column_key_len != 8) {
-          spdlog::error("read column_key_len is: {}, expcted: 8", column_key_len);
-        }
         auto range = idx_salary_.equal_range(salary);
         auto iter = range.first;
         while (iter != range.second) {
           int64_t id = iter->second;
-          auto iter_id = idx_id_.find(id);
-          if (iter_id != idx_id_.end()) {
-            res_num += 1;
-            add_res(iter_id->second, select_column, &res);
+          res_num += 1;
+          if (select_column == Id) { // 无需回表
+            memcpy(res, &id, 8); 
+            res = (char *)res + 8;
+          } else {
+            add_res(idx_id_.find(id)->second, select_column, &res);
           }
           iter++;
         }
