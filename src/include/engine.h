@@ -7,22 +7,14 @@
 #include "user.h"
 #include "log.h"
 
-
 // id int64, user_id char(128), name char(128), salary int64
 // pk : id 			    //主键索引
 // uk : user_id 		//唯一索引
 // sk : salary			//普通索引
 
-enum Phase{Hybrid=0, WriteOnly, ReadOnly};
-
 using primary_key = std::unordered_map<int64_t, User>;
 using unique_key  = std::unordered_map<UserIdWrapper, int64_t>;
 using normal_key  = std::multimap<int64_t, int64_t>;
-
-const int ShardNum = 50; // 对应客户端线程数量
-const int WALNum = 50;  // 在lockfree情况下，必须ShardNum = WALNum
-const int SSDNum = 0;  // 在lockfree情况下，必须ShardNum = WALNum
-const int AEPNum = 50;  // 在lockfree情况下，必须ShardNum = WALNum
 
 const int WritePerClient = 1000000; 
 const int ClientNum = 50;

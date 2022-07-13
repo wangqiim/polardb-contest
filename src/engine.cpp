@@ -8,6 +8,7 @@
 #include "spdlog/spdlog.h"
 #include "engine.h"
 #include "util.h"
+#include "def.h"
 
 thread_local int tid_ = -1;
 const int WaitChangeFinishSecond = 3;
@@ -76,8 +77,10 @@ void record_scan(const char *record, void *context) {
 
 // --------------------Engine-----------------------------
 Engine::Engine(const char* aep_dir, const char* disk_dir)
-  : next_tid_(0), mtx_(), aep_dir_(aep_dir), dir_(disk_dir), disk_logs_(), pmem_logs_(),
-    idx_id_(), idx_user_id_(), idx_salary_(), phase_(Phase::Hybrid) {}
+  : is_changing_(false), phase_(Phase::Hybrid), next_tid_(0)
+  , mtx_(), aep_dir_(aep_dir), dir_(disk_dir), disk_logs_()
+  , pmem_logs_(), idx_id_(), idx_user_id_(), idx_salary_() {
+}
 
 Engine::~Engine() {
   for (size_t i = 0; i < disk_logs_.size(); i++) {
@@ -106,8 +109,8 @@ int Engine::Init() {
   }
 
   // build index
-  Util::gen_sorted_paths(dir_, kWALFileName, disk_file_paths_, SSDNum);
-  Util::gen_sorted_paths(aep_dir_, kWALFileName, pmem_file_paths_, AEPNum);
+  Util::gen_sorted_paths(dir_, WALFileNamePrefix, disk_file_paths_, SSDNum);
+  Util::gen_sorted_paths(aep_dir_, WALFileNamePrefix, pmem_file_paths_, AEPNum);
   
   int record_num = replay_index(disk_file_paths_, pmem_file_paths_);
   spdlog::info("init replay build index done, record num = {}", record_num);

@@ -1,8 +1,7 @@
 #include <string>
 
-constexpr const size_t kWritableFileBufferSize = 65536;
-constexpr const int kBlockSize = 32768;
-constexpr const int RecordSize = 8 + 128 + 128 + 8;
+#include "def.h"
+
 int PosixError(int error_number);
 
 class PosixSequentialFile {

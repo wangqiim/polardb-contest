@@ -2,9 +2,6 @@
 #include <libpmemlog.h>
 #include "env.h"
 
-const char kWALFileName[] = "WAL";
-const int PoolSize = 1 << 29; // 512MB
-
 class Writer {
  public:
   // Create a writer that will append data to "*dest".

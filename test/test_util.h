@@ -7,30 +7,10 @@
 #include <dirent.h>
 #include <sys/stat.h>
 #include <unistd.h>
+#include "user.h"
 #include "const.h"
 
-class TestUser {
-    public:
-        int64_t id=0;
-        char user_id[128]={0};
-        char name[128]={0};
-        int64_t salary=0;
-
-        bool operator==(const TestUser &rhs) {
-            return (id == rhs.id && salary == rhs.salary
-                && memcmp(user_id, rhs.user_id, 128) == 0
-                && memcmp(name, rhs.name, 128) == 0);
-        }
-        
-        std::string to_string() {
-            char buf[500] = {0};
-            sprintf(buf, "id: %lld, user_id: %s, name: %s, salary: %lld",
-                (long long)id, user_id, name, (long long)salary);
-            return std::string(buf);
-        }
-};
-
-enum TestColumn{Id=0,Userid,Name,Salary};
+using TestUser = User;
 
 int drop_datafile(std::string path) {
     if (access(path.c_str(), F_OK) == 0) { // if file exist

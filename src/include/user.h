@@ -1,5 +1,6 @@
 #include <stdint.h>
 #include <stdio.h>
+#include <string.h>
 #include <string>
 
 uint32_t StrHash(const char* s, int size);
@@ -11,6 +12,12 @@ public:
     char name[128] = {0};
     int64_t salary = 0;
     
+    bool operator==(const User &rhs) {
+      return (id == rhs.id && salary == rhs.salary
+          && memcmp(user_id, rhs.user_id, 128) == 0
+          && memcmp(name, rhs.name, 128) == 0);
+    }
+
     std::string to_string() {
         char buf[500] = {0};
         sprintf(buf, "id: %lld, user_id: %u, name: %u, salary: %lld",
