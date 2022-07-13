@@ -70,7 +70,7 @@ PmemReader::PmemReader(const std::string &filename, int pool_size)
 	if (plp_ == nullptr) {
     plp_ = pmemlog_open(filename.c_str());
   } else {
-    spdlog::info("init create log[{}] success!", filename);
+    spdlog::debug("init create log[{}] success!", filename);
   }
 	if (plp_ == nullptr) {
     spdlog::error("can't create and open pmemlog, filename: {}", filename_);

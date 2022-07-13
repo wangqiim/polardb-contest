@@ -43,15 +43,13 @@ class Engine {
   private:
     int replay_index(const std::vector<std::string> disk_path, const std::vector<std::string> pmem_path);
     int must_set_tid();
-    // 为前n个map预留空间，避免插入过程中的rehash
-    int pre_reserve_map(int n, size_t count);
 
-    //read only mod
-    size_t readOnly_read(void *ctx, int32_t select_column,
-      int32_t where_column, const void *column_key, 
-      size_t column_key_len, void *res);
+    void close_all_writers();
+    int open_all_writers();
 
   private:
+    std::atomic<bool> is_changing_;
+    std::atomic<int> phase_;
     std::atomic<int> next_tid_;
     std::mutex mtx_;
     std::vector<std::string> disk_file_paths_;
@@ -61,13 +59,12 @@ class Engine {
     std::vector<Writer *> disk_logs_;
     std::vector<PmemWriter *> pmem_logs_;
 
-    primary_key idx_id_list_[ShardNum];
+    primary_key idx_id_;
 
-    unique_key idx_user_id_list_[ShardNum];
+    unique_key idx_user_id_;
 
-    normal_key idx_salary_list_[ShardNum];
+    normal_key idx_salary_;
     
     // debug log
     std::chrono::_V2::system_clock::time_point start_;
-    Phase phase_;
 };

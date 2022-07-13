@@ -65,7 +65,7 @@ class Util {
       if (!FileExists(path)) {
         int fd = open(path.c_str(), O_RDWR | O_CREAT, 0644);
         if (fd >= 0) {
-          spdlog::info("init create log[{}] success!", path);
+          spdlog::debug("init create log[{}] success!", path);
           close(fd);
         } else {
           spdlog::error("init create log[{}] fail!", path);
