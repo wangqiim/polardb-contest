@@ -124,23 +124,7 @@ int Engine::Init() {
 
 int Engine::Append(const void *datas) {
   if (phase_.load() == Phase::ReadOnly) {
-    bool current = is_changing_.exchange(true);
-    if (current == false) {
-      // current可能和一个刚刚建完索引的线程冲突，因此做一次double check
-      if (phase_.load() == Phase::ReadOnly) {
-        // 由本线程负责建索引
-        // 1. 先修改phase_
-        phase_.store(Phase::Hybrid);
-        // 2. 再修改is_changing_
-        is_changing_.store(false);
-        spdlog::info("phase change: ReadOnly -> Hybrid");
-      }
-    } else {
-      // 等到状态变更完成
-      while (is_changing_.load() == true) {
-        sleep(WaitChangeFinishSecond);
-      }
-    }
+    phase_.store(Phase::Hybrid);
   }
   while (is_changing_.load() == true) {
     sleep(WaitChangeFinishSecond);
