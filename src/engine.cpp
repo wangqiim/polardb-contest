@@ -129,12 +129,9 @@ int Engine::Append(const void *datas) {
       // current可能和一个刚刚建完索引的线程冲突，因此做一次double check
       if (phase_.load() == Phase::ReadOnly) {
         // 由本线程负责建索引
-        // 1. 睡眠一段时间，保证其他线程探测到is_changing_ = true 并且阻塞住，
-        // 使得建立索引的过程中没有正在进行中的R/W（只能说无锁，尽量多睡眠一段时间）
-        sleep(FenceSecond);
-        // 2. 先修改phase_
+        // 1. 先修改phase_
         phase_.store(Phase::Hybrid);
-        // 3. 再修改is_changing_
+        // 2. 再修改is_changing_
         is_changing_.store(false);
         spdlog::info("phase change: ReadOnly -> Hybrid");
       }
