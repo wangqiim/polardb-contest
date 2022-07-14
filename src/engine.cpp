@@ -129,15 +129,12 @@ int Engine::Append(const void *datas) {
       // current可能和一个刚刚建完索引的线程冲突，因此做一次double check
       if (phase_.load() == Phase::ReadOnly) {
         // 由本线程负责建索引
-        // todo(wq):
         // 1. 睡眠一段时间，保证其他线程探测到is_changing_ = true 并且阻塞住，
         // 使得建立索引的过程中没有正在进行中的R/W（只能说无锁，尽量多睡眠一段时间）
         sleep(FenceSecond);
-        // 2. 开始建立索引
-        replay_index(disk_file_paths_, pmem_file_paths_);
-        // 3. 先修改phase_
+        // 2. 先修改phase_
         phase_.store(Phase::Hybrid);
-        // 4. 再修改is_changing_
+        // 3. 再修改is_changing_
         is_changing_.store(false);
         spdlog::info("phase change: ReadOnly -> Hybrid");
       }
@@ -188,7 +185,6 @@ size_t Engine::Read(void *ctx, int32_t select_column,
       // current可能和一个刚刚建完索引的线程冲突，因此做一次double check
       if (phase_.load() == Phase::WriteOnly) {
         // 由本线程负责建索引
-        // todo(wq):
         // 1. 睡眠一段时间，保证其他线程探测到is_changing_ = true 并且阻塞住，
         // 使得建立索引的过程中没有正在进行中的R/W（只能说无锁，尽量多睡眠一段时间）
         sleep(FenceSecond);
