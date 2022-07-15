@@ -11,6 +11,7 @@
 #include "def.h"
 
 thread_local int tid_ = -1;
+thread_local int write_cnt = -1;
 const int WaitChangeFinishSecond = 3;
 const int FenceSecond = 10;
 const std::string phase_name[3] = {"Hybrid", "WriteOnly", "ReadOnly"};
@@ -154,6 +155,10 @@ int Engine::Append(const void *datas) {
   
   if (cur_phase == Phase::Hybrid) {
     mtx_.unlock();
+  }
+  write_cnt++;
+  if (write_cnt == WritePerClient) {
+    spdlog::info("tid[{}] finish write {} records.", tid_, WritePerClient);
   }
   return 0;
 }
