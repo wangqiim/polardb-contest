@@ -11,7 +11,7 @@
 #include "def.h"
 
 thread_local int tid_ = -1;
-thread_local int write_cnt = -1;
+thread_local int write_cnt = 0;
 const int WaitChangeFinishSecond = 3;
 const int FenceSecond = 10;
 const std::string phase_name[3] = {"Hybrid", "WriteOnly", "ReadOnly"};

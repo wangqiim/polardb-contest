@@ -12,7 +12,7 @@ const int PoolSize = 1 << 29; // 512MB can't exceed 1GB
 // ------ engine.h -------
 const int WritePerClient = 1000000; 
 const int ClientNum = 50;
-const int SSDNum = 49;  // 在lockfree情况下，必须ClientNum = SSDNum + AEPNum
-const int AEPNum = 1;  // 在lockfree情况下，必须ClientNum = SSDNum + AEPNum
+const int SSDNum = 48;  // 在lockfree情况下，必须ClientNum = SSDNum + AEPNum
+const int AEPNum = 2;  // 在lockfree情况下，必须ClientNum = SSDNum + AEPNum
 
 enum Phase{Hybrid=0, WriteOnly, ReadOnly};
