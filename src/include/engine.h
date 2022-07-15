@@ -16,9 +16,6 @@ using primary_key = std::unordered_map<int64_t, User>;
 using unique_key  = std::unordered_map<UserIdWrapper, int64_t>;
 using normal_key  = std::multimap<int64_t, int64_t>;
 
-const int WritePerClient = 1000000; 
-const int ClientNum = 50;
-
 class Engine {
   public:
     Engine(const char* aep_dir, const char* disk_dir);

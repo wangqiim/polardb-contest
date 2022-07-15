@@ -13,6 +13,7 @@
 thread_local int tid_ = -1;
 const int WaitChangeFinishSecond = 3;
 const int FenceSecond = 10;
+const std::string phase_name[3] = {"Hybrid", "WriteOnly", "ReadOnly"};
 
 void add_res(const User &user, int32_t select_column, void **result) {
   switch(select_column) {
@@ -117,7 +118,7 @@ int Engine::Init() {
   phase_.store(record_num == 0? Phase::WriteOnly: Phase::ReadOnly);
 
   Util::print_resident_set_size();
-  spdlog::info("engine init done, phase_:{}", phase_.load());
+  spdlog::info("engine init done, phase_:{}", phase_name[phase_.load()]);
   start_ = std::chrono::system_clock::now();
   return 0;
 }
@@ -287,9 +288,9 @@ int Engine::replay_index(const std::vector<std::string> disk_path, const std::ve
 inline int Engine::must_set_tid() {
   if (tid_ == -1) {
     tid_ = next_tid_.fetch_add(1);
-    if (tid_ >= ShardNum) {
+    if (tid_ >= ClientNum) {
       spdlog::warn("w/r thread excceed 50!!");
-      tid_ %= ShardNum;
+      tid_ %= ClientNum;
     }
   }
   return 0;
