@@ -195,17 +195,17 @@ MmapReader::MmapReader(const std::string &filename, int mmap_size)
   // 1. open fd; (must have been create)
   fd_ = open(filename_.c_str(), O_RDWR, 0644);
   if (fd_ < 0) {
-    spdlog::error("[MmapWriter] can't open file {}", filename_);
+    spdlog::error("[MmapReader] can't open file {}", filename_);
     exit(1);
   }
   int off = (int)lseek(fd_, 0, SEEK_END);
   if (off < 0) {
-    spdlog::error("[MmapWriter] lseek end failed");
+    spdlog::error("[MmapReader] lseek end failed");
     exit(1);
   }
   if (off == 0) {
     if (posix_fallocate(fd_, 0, mmap_size_) != 0) {
-      spdlog::error("[MmapWriter] posix_fallocate failed");
+      spdlog::error("[MmapReader] posix_fallocate failed");
       exit(1);
     }
   }
