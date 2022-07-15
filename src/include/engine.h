@@ -15,6 +15,7 @@
 using primary_key = std::unordered_map<int64_t, UserWithoutId>;
 using unique_key  = std::unordered_map<UserIdWrapper, int64_t>;
 using normal_key  = std::multimap<int64_t, int64_t>;
+using hack_key  = std::unordered_map<int64_t, int64_t>;
 
 class Engine {
   public:
@@ -53,6 +54,7 @@ class Engine {
     unique_key idx_user_id_;
 
     normal_key idx_salary_;
+    hack_key hack_idx_salary_;
     
     // debug log
     std::chrono::_V2::system_clock::time_point start_;

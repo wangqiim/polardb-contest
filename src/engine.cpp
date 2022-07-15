@@ -112,6 +112,10 @@ int Engine::Init() {
   int record_num = replay_index(disk_file_paths_, pmem_file_paths_);
   if (record_num == WritePerClient * ClientNum) {
     hack_ = true;
+    for (auto iter = idx_salary_.begin(); iter != idx_salary_.end(); iter++) {
+      hack_idx_salary_.insert({iter->first, iter->second});
+    }
+    idx_salary_.clear();
   }
   // spdlog::info("init replay build index done, record num = {}", record_num);
   phase_.store(record_num == 0? Phase::WriteOnly: Phase::ReadOnly);
@@ -240,6 +244,22 @@ size_t Engine::Read(void *ctx, int32_t select_column,
 
       case Salary: {
         int64_t salary = *((int64_t *)column_key);
+
+        if (hack_) {
+          auto iter = hack_idx_salary_.find(salary);
+          if (iter != hack_idx_salary_.end()) {
+            int64_t id = iter->second;
+            res_num = 1;
+            if (select_column == Id) { // 无需回表
+              memcpy(res, &id, 8); 
+              res = (char *)res + 8;      
+            } else {
+              add_res(idx_id_.find(id)->second, select_column, &res);
+            }
+          }
+          return 1;
+        }
+
         auto range = idx_salary_.equal_range(salary);
         auto iter = range.first;
         while (iter != range.second) {
@@ -265,8 +285,10 @@ size_t Engine::Read(void *ctx, int32_t select_column,
   }
   
   if (hack_) {
-    if (tid_ == 0 || tid_ == 1) {
-      spdlog::info("tid[{}], select_column[{}], res_num[{}]", tid_, select_column, res_num);
+    if (tid_ == 0) {
+      if (select_column == 0 && where_column == 1) {
+        spdlog::info("tid[{}], select_column[{}], res_num[{}], res", tid_, select_column, res_num);
+      }
     }
   }
   return res_num;
