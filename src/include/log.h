@@ -2,6 +2,7 @@
 #include <libpmemlog.h>
 #include "env.h"
 
+//---------------------- write append log--------------------------
 class Writer {
  public:
   // Create a writer that will append data to "*dest".
@@ -37,6 +38,7 @@ class Reader {
 };
 
 
+//--------------------- pmem log -----------------------------------
 // ref: https://pmem.io/pmdk/manpages/linux/master/libpmemlog/libpmemlog.7/
 class PmemReader {
  public:
@@ -62,4 +64,36 @@ class PmemWriter {
  private:
   PMEMlogpool *plp_;
   const std::string filename_;
+};
+
+//--------------------- mmap file-----------------------------------
+class MmapWriter {
+ public:
+  MmapWriter() = delete;
+  MmapWriter(const std::string &filename, int mmap_size);
+  ~MmapWriter();
+  MmapWriter(const MmapWriter&) = delete;
+  MmapWriter& operator=(const MmapWriter&) = delete;
+
+  int Append(const void* data, const size_t len);
+ private:
+  const std::string filename_;
+  int mmap_size_;
+  int fd_;
+  char *start_;
+  char *curr_;
+};
+
+class MmapReader {
+ public:
+  MmapReader(const std::string &filename, int mmap_size);
+  ~MmapReader();
+
+  bool ReadRecord(char *&record, int len);
+ private:
+  const std::string filename_;
+  int mmap_size_;
+  int fd_;
+  char *start_;
+  char *curr_;
 };

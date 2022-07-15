@@ -1,6 +1,8 @@
 #include <functional>
+#include <sys/mman.h>
 #include "spdlog/spdlog.h"
 #include "log.h"
+#include <unistd.h>
 
 Writer::Writer(PosixWritableFile* dest) : dest_(dest) {}
 
@@ -140,4 +142,101 @@ int PmemWriter::Append(const void* data, const size_t len) {
 		exit(1);
 	}
   return 0;
+}
+
+//--------------------- mmap file-----------------------------------
+MmapWriter::MmapWriter(const std::string &filename, int mmap_size)
+    : filename_(filename), mmap_size_(mmap_size), fd_(-1)
+    , start_(nullptr), curr_(nullptr) {
+  // 1. open fd; (must have been create)
+  fd_ = open(filename_.c_str(), O_RDWR, 0644);
+  if (fd_ < 0) {
+    spdlog::error("[MmapWriter] can't open file {}", filename_);
+    exit(1);
+  }
+  int off = (int)lseek(fd_, 0, SEEK_END);
+  if (off < 0) {
+    spdlog::error("[MmapWriter] lseek end failed");
+    exit(1);
+  }
+  if (off == 0) {
+    if (posix_fallocate(fd_, 0, mmap_size_) != 0) {
+      spdlog::error("[MmapWriter] posix_fallocate failed");
+      exit(1);
+    }
+  }
+  // 2. mmap
+  void* ptr = mmap(NULL, mmap_size_, PROT_READ | PROT_WRITE, MAP_SHARED, fd_, 0);
+  if (ptr == MAP_FAILED) {
+    spdlog::error("[MmapWriter] mmap failed, errno is {}", strerror(errno));
+    exit(1);
+  }
+  start_ = reinterpret_cast<char *>(ptr);
+  curr_ = start_;
+  if (off == 0) {
+    memset(start_, 0, mmap_size_);
+  }
+}
+
+MmapWriter::~MmapWriter() {
+  munmap(start_, mmap_size_);
+  close(fd_);
+}
+
+int MmapWriter::Append(const void* data, const size_t len) {
+  memcpy(curr_, data, len);
+  curr_ += len;
+  return 0;
+}
+
+MmapReader::MmapReader(const std::string &filename, int mmap_size)
+    : filename_(filename), mmap_size_(mmap_size), fd_(-1)
+    , start_(nullptr), curr_(nullptr) {
+  // 1. open fd; (must have been create)
+  fd_ = open(filename_.c_str(), O_RDWR, 0644);
+  if (fd_ < 0) {
+    spdlog::error("[MmapWriter] can't open file {}", filename_);
+    exit(1);
+  }
+  int off = (int)lseek(fd_, 0, SEEK_END);
+  if (off < 0) {
+    spdlog::error("[MmapWriter] lseek end failed");
+    exit(1);
+  }
+  if (off == 0) {
+    if (posix_fallocate(fd_, 0, mmap_size_) != 0) {
+      spdlog::error("[MmapWriter] posix_fallocate failed");
+      exit(1);
+    }
+  }
+  // 2. mmap
+  void* ptr = mmap(NULL, mmap_size_, PROT_READ | PROT_WRITE, MAP_SHARED, fd_, 0);
+  if (ptr == MAP_FAILED) {
+    spdlog::error("[MmapReader] mmap failed, errno is {}", strerror(errno));
+    exit(1);
+  }
+  start_ = reinterpret_cast<char *>(ptr);
+  curr_ = start_;
+  if (off == 0) {
+    memset(start_, 0, mmap_size_);
+  }
+}
+
+MmapReader::~MmapReader() {
+  munmap(start_, mmap_size_);
+  close(fd_);
+}
+
+bool MmapReader::ReadRecord(char *&record, int len) {
+  static char buf[RecordSize] = {0};
+  if (curr_ + len > start_ + mmap_size_) {
+    spdlog::error("[ReadRecord] error");
+    exit(1);
+  }
+  if (memcmp(curr_, buf, RecordSize) != 0) {
+    record = curr_;
+    curr_ += len;
+    return true;
+  }
+  return false;
 }

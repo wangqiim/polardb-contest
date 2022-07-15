@@ -12,8 +12,6 @@
 
 thread_local int tid_ = -1;
 thread_local int write_cnt = 0;
-const int WaitChangeFinishSecond = 3;
-const int FenceSecond = 10;
 const std::string phase_name[3] = {"Hybrid", "WriteOnly", "ReadOnly"};
 
 void add_res(const User &user, int32_t select_column, void **result) {
@@ -139,7 +137,7 @@ int Engine::Append(const void *datas) {
   const User *user = reinterpret_cast<const User *>(datas);
 
   if (tid_ < SSDNum) {
-    disk_logs_[tid_]->AddRecord(datas, RecordSize);
+    disk_logs_[tid_]->Append(datas, RecordSize);
   } else {
     pmem_logs_[tid_ - SSDNum]->Append(datas, RecordSize);
   }
@@ -271,16 +269,12 @@ int Engine::replay_index(const std::vector<std::string> disk_path, const std::ve
   Index_Helper index_builder(&idx_id_, &idx_user_id_, &idx_salary_);
   for (size_t log_id = 0; log_id < disk_path.size(); log_id++) {
     Util::CreateIfNotExists(disk_path[log_id]);
-    PosixSequentialFile *file = nullptr;
-    int ret = PosixEnv::NewSequentialFile(disk_path[log_id], &file);
-    if (ret == 0) {
-      // 如果ret != 0,没有给file分配内存,因此可以让reader管理file指针的内存,reader离开作用域时，会调用reader的析构函数释放file指针的空间
-      Reader reader(file);
-      std::string record;
-      while (reader.ReadRecord(record, RecordSize)) {
-        const User *user = (const User *)record.data();
-        index_builder.Scan(user);
-      }
+    // 如果ret != 0,没有给file分配内存,因此可以让reader管理file指针的内存,reader离开作用域时，会调用reader的析构函数释放file指针的空间
+    MmapReader reader(disk_path[log_id], MmapSize);
+    char *record;
+    while (reader.ReadRecord(record, RecordSize)) {
+      const User *user = (const User *)record;
+      index_builder.Scan(user);
     }
   }
   for (size_t log_id = 0; log_id < pmem_path.size(); log_id++) {
@@ -317,11 +311,7 @@ for (size_t i = 0; i < disk_logs_.size(); i++) {
 int Engine::open_all_writers() {
   PosixWritableFile *walfile = nullptr;
   for (const auto &fname: disk_file_paths_) {
-    int ret = PosixEnv::NewAppendableFile(fname, &walfile);
-    if (ret != 0) {
-      return -1;
-    }
-    disk_logs_.push_back(new Writer(walfile));
+    disk_logs_.push_back(new MmapWriter(fname, MmapSize));
   }
   for (const auto &fname: pmem_file_paths_) {
     pmem_logs_.push_back(new PmemWriter(fname, PoolSize));
