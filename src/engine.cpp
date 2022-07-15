@@ -296,6 +296,8 @@ int Engine::replay_index(const std::vector<std::string> disk_path, const std::ve
 }
 
 inline int Engine::must_set_tid() {
+  if (hack_)
+    return 0;
   if (tid_ == -1) {
     tid_ = next_tid_.fetch_add(1);
     if (tid_ >= ClientNum) {
