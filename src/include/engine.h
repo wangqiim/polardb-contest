@@ -56,4 +56,5 @@ class Engine {
     
     // debug log
     std::chrono::_V2::system_clock::time_point start_;
+    bool hack_ = false;
 };

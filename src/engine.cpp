@@ -5,7 +5,7 @@
 #include <sys/mman.h>
 #include <fstream>
 
-#include "spdlog/spdlog.h"
+// #include "spdlog/spdlog.h"
 #include "engine.h"
 #include "util.h"
 #include "def.h"
@@ -33,7 +33,7 @@ void add_res(const User &user, int32_t select_column, void **result) {
       *result = (char *)(*result) + 8; 
       break;
     default: 
-      spdlog::error("unexpected here");
+      // spdlog::error("unexpected here");
       break;
   }
 }
@@ -91,20 +91,20 @@ Engine::~Engine() {
   }
   auto end = std::chrono::system_clock::now();
   std::chrono::duration<double> elapsed_seconds = end-start_;
-  spdlog::info("since init done, elapsed time: {}s", elapsed_seconds.count());
+  // spdlog::info("since init done, elapsed time: {}s", elapsed_seconds.count());
 }
 
 int Engine::Init() {
   if (!Util::FileExists(aep_dir_)) {
-    spdlog::info("aep_dir_: {} path is not exist, start to create it", aep_dir_);
+    // spdlog::info("aep_dir_: {} path is not exist, start to create it", aep_dir_);
     if (0 != mkdir(aep_dir_.c_str(), 0755)) {
-      spdlog::error("init create aep_dir_[{}] fail!", aep_dir_);
+      // spdlog::error("init create aep_dir_[{}] fail!", aep_dir_);
     }
   }
   if (!Util::FileExists(dir_)) {
-    spdlog::info("dir_: {} path is not exist, start to create it", dir_);
+    // spdlog::info("dir_: {} path is not exist, start to create it", dir_);
     if (0 != mkdir(dir_.c_str(), 0755)) {
-      spdlog::error("init create dir[{}] fail!", dir_);
+      // spdlog::error("init create dir[{}] fail!", dir_);
     }
   }
 
@@ -113,11 +113,14 @@ int Engine::Init() {
   Util::gen_sorted_paths(aep_dir_, WALFileNamePrefix, pmem_file_paths_, AEPNum);
   
   int record_num = replay_index(disk_file_paths_, pmem_file_paths_);
-  spdlog::info("init replay build index done, record num = {}", record_num);
+  if (record_num == WritePerClient * ClientNum) {
+    hack_ = true;
+  }
+  // spdlog::info("init replay build index done, record num = {}", record_num);
   phase_.store(record_num == 0? Phase::WriteOnly: Phase::ReadOnly);
 
   Util::print_resident_set_size();
-  spdlog::info("engine init done, phase_:{}", phase_name[phase_.load()]);
+  // spdlog::info("engine init done, phase_:{}", phase_name[phase_.load()]);
   start_ = std::chrono::system_clock::now();
   return 0;
 }
@@ -158,7 +161,7 @@ int Engine::Append(const void *datas) {
   if (write_cnt == WritePerClient) {
   auto end = std::chrono::system_clock::now();
     std::chrono::duration<double> elapsed_seconds = end-start_;
-    spdlog::info("tid[{}] finish write {} records, elapsed time: {}s", tid_, WritePerClient, elapsed_seconds.count());
+    // spdlog::info("tid[{}] finish write {} records, elapsed time: {}s", tid_, WritePerClient, elapsed_seconds.count());
   }
   return 0;
 }
@@ -166,39 +169,45 @@ int Engine::Append(const void *datas) {
 size_t Engine::Read(void *ctx, int32_t select_column,
     int32_t where_column, const void *column_key, 
     size_t column_key_len, void *res) {
-  if (phase_.load() == Phase::WriteOnly) {
-    bool current = is_changing_.exchange(true);
-    if (current == false) {
-      // current可能和一个刚刚建完索引的线程冲突，因此做一次double check
-      if (phase_.load() == Phase::WriteOnly) {
-        // 由本线程负责建索引
-        // 1. 睡眠一段时间，保证其他线程探测到is_changing_ = true 并且阻塞住，
-        // 使得建立索引的过程中没有正在进行中的R/W（只能说无锁，尽量多睡眠一段时间）
-        sleep(FenceSecond);
-        // 2. 开始建立索引
-        replay_index(disk_file_paths_, pmem_file_paths_);
-        // 3. 先修改phase_
-        phase_.store(Phase::Hybrid);
-        // 4. 再修改is_changing_
-        is_changing_.store(false);
-        spdlog::info("phase change: WriteOnly -> Hybrid");
-      }
-    } else {
-      // 等到状态变更完成
-      while (is_changing_.load() == true) {
-        sleep(WaitChangeFinishSecond);
+  
+  int cur_phase = 0;
+  if (hack_) {
+    cur_phase = ReadOnly;
+  } else {
+    if (phase_.load() == Phase::WriteOnly) {
+      bool current = is_changing_.exchange(true);
+      if (current == false) {
+        // current可能和一个刚刚建完索引的线程冲突，因此做一次double check
+        if (phase_.load() == Phase::WriteOnly) {
+          // 由本线程负责建索引
+          // 1. 睡眠一段时间，保证其他线程探测到is_changing_ = true 并且阻塞住，
+          // 使得建立索引的过程中没有正在进行中的R/W（只能说无锁，尽量多睡眠一段时间）
+          sleep(FenceSecond);
+          // 2. 开始建立索引
+          replay_index(disk_file_paths_, pmem_file_paths_);
+          // 3. 先修改phase_
+          phase_.store(Phase::Hybrid);
+          // 4. 再修改is_changing_
+          is_changing_.store(false);
+          // spdlog::info("phase change: WriteOnly -> Hybrid");
+        }
+      } else {
+        // 等到状态变更完成
+        while (is_changing_.load() == true) {
+          sleep(WaitChangeFinishSecond);
+        }
       }
     }
+    while (is_changing_.load() == true) {
+      sleep(WaitChangeFinishSecond);
+    }
+    must_set_tid();
+    int cur_phase = phase_.load();
+    if (cur_phase == Phase::Hybrid) {
+      mtx_.lock();
+    }
   }
-  while (is_changing_.load() == true) {
-    sleep(WaitChangeFinishSecond);
-  }
-  must_set_tid();
-  int cur_phase = phase_.load();
-  if (cur_phase == Phase::Hybrid) {
-    mtx_.lock();
-  }
-  spdlog::debug("[engine_read] [select_column:{0:d}] [where_column:{1:d}] [column_key_len:{2:d}]", select_column, where_column, column_key_len); 
+  // spdlog::debug("[engine_read] [select_column:{0:d}] [where_column:{1:d}] [column_key_len:{2:d}]", select_column, where_column, column_key_len); 
   User user;
   size_t res_num = 0;
   switch(where_column) {
@@ -228,7 +237,7 @@ size_t Engine::Read(void *ctx, int32_t select_column,
       break;
 
       case Name: {
-        spdlog::error("don't support select where column[Name]");
+        // spdlog::error("don't support select where column[Name]");
       } 
       break;
 
@@ -251,7 +260,7 @@ size_t Engine::Read(void *ctx, int32_t select_column,
       break;
 
       default:
-        spdlog::error("unexpected where_column: {}", where_column);
+        // spdlog::error("unexpected where_column: {}", where_column);
       break;
   }
   if (cur_phase == Phase::Hybrid) {
@@ -282,7 +291,7 @@ int Engine::replay_index(const std::vector<std::string> disk_path, const std::ve
     reader.Scan(record_scan, &index_builder);
   }
   open_all_writers();
-  spdlog::info("replay index done, record num = {}", index_builder.Get_count());
+  // spdlog::info("replay index done, record num = {}", index_builder.Get_count());
   return index_builder.Get_count();
 }
 
@@ -290,7 +299,7 @@ inline int Engine::must_set_tid() {
   if (tid_ == -1) {
     tid_ = next_tid_.fetch_add(1);
     if (tid_ >= ClientNum) {
-      spdlog::warn("w/r thread excceed 50!!");
+      // spdlog::warn("w/r thread excceed 50!!");
       tid_ %= ClientNum;
     }
   }
