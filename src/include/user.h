@@ -26,6 +26,25 @@ public:
     }
 };
 
+class UserWithoutId {
+public:
+    char user_id[128] = {0};
+    char name[128] = {0};
+    int64_t salary = 0;
+    
+    bool operator==(const User &rhs) {
+      return (salary == rhs.salary
+          && memcmp(user_id, rhs.user_id, 128) == 0
+          && memcmp(name, rhs.name, 128) == 0);
+    }
+
+    std::string to_string() {
+        char buf[500] = {0};
+        sprintf(buf, "user_id: %u, name: %u, salary: %lld", StrHash(user_id, 128), StrHash(name, 128), (long long)salary);
+        return std::string(buf);
+    }
+};
+
 enum Column{Id=0,Userid,Name,Salary};
 
 const int UseridLen = 128;

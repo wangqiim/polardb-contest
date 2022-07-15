@@ -14,12 +14,8 @@ thread_local int tid_ = -1;
 thread_local int write_cnt = 0;
 const std::string phase_name[3] = {"Hybrid", "WriteOnly", "ReadOnly"};
 
-void add_res(const User &user, int32_t select_column, void **result) {
+void add_res(const UserWithoutId &user, int32_t select_column, void **result) {
   switch(select_column) {
-    case Id: 
-      memcpy(*result, &user.id, 8); 
-      *result = (char *)(*result) + 8; 
-      break;
     case Userid: 
       memcpy(*result, user.user_id, 128); 
       *result = (char *)(*result)  + 128; 
@@ -61,7 +57,8 @@ class Index_Helper {
 
 void Index_Helper::Scan(const User *user) {
   // build pk index
-  idx_id_->insert({user->id, *user});
+  const UserWithoutId *userWithoutId = reinterpret_cast<const UserWithoutId*>(user->user_id);
+  idx_id_->insert({user->id, *userWithoutId});
   // build uk index
   idx_user_id_->insert({UserIdWrapper(user->user_id), user->id});
   // build nk index
@@ -146,7 +143,8 @@ int Engine::Append(const void *datas) {
   }
 
   if (cur_phase == Phase::Hybrid) {
-    idx_id_.insert({user->id, *user});
+    const UserWithoutId *userWithoutId = reinterpret_cast<const UserWithoutId*>(user->user_id);
+    idx_id_.insert({user->id, *userWithoutId});
     // build uk index
     idx_user_id_.emplace(user->user_id, user->id); // avoid unneccessary copy constructer
 
@@ -156,12 +154,6 @@ int Engine::Append(const void *datas) {
   
   if (cur_phase == Phase::Hybrid) {
     mtx_.unlock();
-  }
-  write_cnt++;
-  if (write_cnt == WritePerClient) {
-  auto end = std::chrono::system_clock::now();
-    std::chrono::duration<double> elapsed_seconds = end-start_;
-    // spdlog::info("tid[{}] finish write {} records, elapsed time: {}s", tid_, WritePerClient, elapsed_seconds.count());
   }
   return 0;
 }
@@ -208,7 +200,6 @@ size_t Engine::Read(void *ctx, int32_t select_column,
     }
   }
   // spdlog::debug("[engine_read] [select_column:{0:d}] [where_column:{1:d}] [column_key_len:{2:d}]", select_column, where_column, column_key_len); 
-  User user;
   size_t res_num = 0;
   switch(where_column) {
       case Id: {
@@ -216,7 +207,12 @@ size_t Engine::Read(void *ctx, int32_t select_column,
         auto iter = idx_id_.find(id);
         if (iter != idx_id_.end()) {
           res_num = 1;
-          add_res(iter->second, select_column, &res);
+          if (select_column == Id) { // 无需回表
+            memcpy(res, &id, 8); 
+            res = (char *)res + 8;      
+          } else {
+            add_res(iter->second, select_column, &res);
+          }
         }
       }
       break;
