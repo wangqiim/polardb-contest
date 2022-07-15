@@ -162,6 +162,7 @@ size_t Engine::Read(void *ctx, int32_t select_column,
     int32_t where_column, const void *column_key, 
     size_t column_key_len, void *res) {
   
+  must_set_tid();
   int cur_phase = 0;
   if (hack_) {
     cur_phase = ReadOnly;
@@ -262,6 +263,12 @@ size_t Engine::Read(void *ctx, int32_t select_column,
   if (cur_phase == Phase::Hybrid) {
     mtx_.unlock();
   }
+  
+  if (hack_) {
+    if (tid_ == 0 || tid_ == 1) {
+      spdlog::info("tid[{}], select_column[{}], res_num[{}]", tid_, select_column, res_num);
+    }
+  }
   return res_num;
 }
 
@@ -292,8 +299,6 @@ int Engine::replay_index(const std::vector<std::string> disk_path, const std::ve
 }
 
 inline int Engine::must_set_tid() {
-  if (hack_)
-    return 0;
   if (tid_ == -1) {
     tid_ = next_tid_.fetch_add(1);
     if (tid_ >= ClientNum) {
