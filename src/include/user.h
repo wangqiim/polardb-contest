@@ -45,6 +45,10 @@ public:
     }
     return true;
   }
+  
+  bool operator< (const UserIdWrapper &other) const {
+    return memcmp(s, other.s, UseridLen) < 0;
+  }
 };
 
 namespace std {
