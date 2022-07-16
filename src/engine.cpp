@@ -112,6 +112,7 @@ int Engine::Init() {
   int record_num = replay_index(disk_file_paths_, pmem_file_paths_);
   if (record_num == WritePerClient * ClientNum) {
     hack_ = true;
+    hack_idx_salary_.reserve(WritePerClient * ClientNum);
     for (auto iter = idx_salary_.begin(); iter != idx_salary_.end(); iter++) {
       hack_idx_salary_.insert({iter->first, iter->second});
     }
@@ -166,7 +167,6 @@ size_t Engine::Read(void *ctx, int32_t select_column,
     int32_t where_column, const void *column_key, 
     size_t column_key_len, void *res) {
   
-  must_set_tid();
   int cur_phase = 0;
   if (hack_) {
     cur_phase = ReadOnly;
@@ -282,14 +282,6 @@ size_t Engine::Read(void *ctx, int32_t select_column,
   }
   if (cur_phase == Phase::Hybrid) {
     mtx_.unlock();
-  }
-  
-  if (hack_) {
-    if (tid_ == 0) {
-      if (select_column == 0 && where_column == 1) {
-        spdlog::info("tid[{}], select_column[{}], res_num[{}], res", tid_, select_column, res_num);
-      }
-    }
   }
   return res_num;
 }
