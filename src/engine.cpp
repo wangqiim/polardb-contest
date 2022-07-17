@@ -42,9 +42,9 @@ void add_res(const User &user, int32_t select_column, void **result) {
 class Index_Helper {
   public:
     Index_Helper(primary_key *idx_id,
-      unique_key *idx_user_id, normal_key  *idx_salary)
+      unique_key *idx_user_id, normal_key  *idx_salary, std::vector<User> *users)
       : count_(0), idx_id_(idx_id),
-        idx_user_id_(idx_user_id), idx_salary_(idx_salary) { }
+        idx_user_id_(idx_user_id), idx_salary_(idx_salary), users_(users) { }
 
     // 当is_build为false时，仅仅记录count_，不build索引
     void Scan(const User *user);
@@ -53,19 +53,23 @@ class Index_Helper {
 
   private:
     int  count_;
-
+    std::vector<User> *users_;
     primary_key *idx_id_;
     unique_key  *idx_user_id_;
     normal_key  *idx_salary_;
 };
 
 void Index_Helper::Scan(const User *user) {
+
+  users_->push_back(*user);
+
+  size_t record_slot = users_->size() - 1;
   // build pk index
-  idx_id_->insert({user->id, *user});
+  idx_id_->insert({user->id, record_slot});
   // build uk index
-  idx_user_id_->insert({UserIdWrapper(user->user_id), user->id});
+  idx_user_id_->insert({UserIdWrapper(user->user_id), record_slot});
   // build nk index
-  idx_salary_->insert({user->salary,user->id});
+  idx_salary_->insert({user->salary, record_slot});
   count_++;
 }
 
@@ -143,12 +147,14 @@ int Engine::Append(const void *datas) {
   }
 
   if (cur_phase == Phase::Hybrid) {
-    idx_id_.insert({user->id, *user});
+    users_.push_back(*user);
+    size_t record_slot = users_.size() - 1;
+    idx_id_.insert({user->id, record_slot});
     // build uk index
-    idx_user_id_.emplace(user->user_id, user->id); // avoid unneccessary copy constructer
+    idx_user_id_.emplace(user->user_id, record_slot); // avoid unneccessary copy constructer
 
     // build nk index
-    idx_salary_.insert({user->salary, user->id});
+    idx_salary_.insert({user->salary, record_slot});
   }
   
   if (cur_phase == Phase::Hybrid) {
@@ -207,7 +213,7 @@ size_t Engine::Read(void *ctx, int32_t select_column,
         auto iter = idx_id_.find(id);
         if (iter != idx_id_.end()) {
           res_num = 1;
-          add_res(iter->second, select_column, &res);
+          add_res(users_[iter->second], select_column, &res);
         }
       }
       break;
@@ -215,14 +221,8 @@ size_t Engine::Read(void *ctx, int32_t select_column,
       case Userid: {
         auto iter = idx_user_id_.find(UserIdWrapper((const char *)column_key));
         if (iter != idx_user_id_.end()) {
-          int64_t id = iter->second;
           res_num = 1;
-          if (select_column == Id) { // 无需回表
-            memcpy(res, &id, 8); 
-            res = (char *)res + 8;      
-          } else {
-            add_res(idx_id_.find(id)->second, select_column, &res);
-          }
+          add_res(users_[iter->second], select_column, &res);
         }
       } 
       break;
@@ -237,14 +237,8 @@ size_t Engine::Read(void *ctx, int32_t select_column,
         auto range = idx_salary_.equal_range(salary);
         auto iter = range.first;
         while (iter != range.second) {
-          int64_t id = iter->second;
           res_num += 1;
-          if (select_column == Id) { // 无需回表
-            memcpy(res, &id, 8); 
-            res = (char *)res + 8;
-          } else {
-            add_res(idx_id_.find(id)->second, select_column, &res);
-          }
+          add_res(users_[iter->second], select_column, &res);
           iter++;
         }
       }
@@ -266,7 +260,8 @@ int Engine::replay_index(const std::vector<std::string> disk_path, const std::ve
   idx_id_.clear();
   idx_user_id_.clear();
   idx_salary_.clear();
-  Index_Helper index_builder(&idx_id_, &idx_user_id_, &idx_salary_);
+  users_.clear();
+  Index_Helper index_builder(&idx_id_, &idx_user_id_, &idx_salary_, &users_);
   for (size_t log_id = 0; log_id < disk_path.size(); log_id++) {
     Util::CreateIfNotExists(disk_path[log_id]);
     // 如果ret != 0,没有给file分配内存,因此可以让reader管理file指针的内存,reader离开作用域时，会调用reader的析构函数释放file指针的空间

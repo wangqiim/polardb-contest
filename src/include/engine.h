@@ -12,9 +12,9 @@
 // uk : user_id 		//唯一索引
 // sk : salary			//普通索引
 
-using primary_key = std::unordered_map<int64_t, User>;
-using unique_key  = std::unordered_map<UserIdWrapper, int64_t>;
-using normal_key  = std::unordered_multimap<int64_t, int64_t>;
+using primary_key = std::unordered_map<int64_t, size_t>;
+using unique_key  = std::unordered_map<UserIdWrapper, size_t>;
+using normal_key  = std::unordered_multimap<int64_t, size_t>;
 
 class Engine {
   public:
@@ -48,6 +48,7 @@ class Engine {
     std::vector<MmapWriter *> disk_logs_;
     std::vector<PmemWriter *> pmem_logs_;
 
+    std::vector<User> users_;
     primary_key idx_id_;
 
     unique_key idx_user_id_;
