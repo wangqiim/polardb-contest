@@ -14,7 +14,7 @@ thread_local int tid_ = -1;
 thread_local int write_cnt = 0;
 const std::string phase_name[3] = {"Hybrid", "WriteOnly", "ReadOnly"};
 
-void add_res(const UserWithoutId &user, int32_t select_column, void **result) {
+void add_res(const User &user, int32_t select_column, void **result) {
   switch(select_column) {
     case Userid: 
       memcpy(*result, user.user_id, 128); 
@@ -38,9 +38,9 @@ void add_res(const UserWithoutId &user, int32_t select_column, void **result) {
 class Index_Helper {
   public:
     Index_Helper(primary_key *idx_id,
-      unique_key *idx_user_id, normal_key  *idx_salary)
+      unique_key *idx_user_id, normal_key  *idx_salary, std::vector<User> *users)
       : count_(0), idx_id_(idx_id),
-        idx_user_id_(idx_user_id), idx_salary_(idx_salary) { }
+        idx_user_id_(idx_user_id), idx_salary_(idx_salary), users(users) { }
 
     // 当is_build为false时，仅仅记录count_，不build索引
     void Scan(const User *user);
@@ -49,20 +49,23 @@ class Index_Helper {
 
   private:
     int  count_;
-
+    std::vector<User> *users;
     primary_key *idx_id_;
     unique_key  *idx_user_id_;
     normal_key  *idx_salary_;
 };
 
 void Index_Helper::Scan(const User *user) {
+
+  users->push_back(*user);
+
+  size_t users_id = users->size() - 1;
   // build pk index
-  const UserWithoutId *userWithoutId = reinterpret_cast<const UserWithoutId*>(user->user_id);
-  idx_id_->insert({user->id, *userWithoutId});
+  idx_id_->insert({user->id, users_id});
   // build uk index
-  idx_user_id_->insert({UserIdWrapper(user->user_id), user->id});
+  idx_user_id_->insert({UserIdWrapper(user->user_id), users_id});
   // build nk index
-  idx_salary_->insert({user->salary,user->id});
+  idx_salary_->insert({user->salary, users_id});
   count_++;
 }
 
@@ -148,13 +151,14 @@ int Engine::Append(const void *datas) {
   }
 
   if (cur_phase == Phase::Hybrid) {
-    const UserWithoutId *userWithoutId = reinterpret_cast<const UserWithoutId*>(user->user_id);
-    idx_id_.insert({user->id, *userWithoutId});
+    users.push_back(*user);
+    size_t users_id = users.size() - 1;
+    idx_id_.insert({user->id, users_id});
     // build uk index
-    idx_user_id_.emplace(user->user_id, user->id); // avoid unneccessary copy constructer
+    idx_user_id_.emplace(user->user_id, users_id); // avoid unneccessary copy constructer
 
     // build nk index
-    idx_salary_.insert({user->salary, user->id});
+    idx_salary_.insert({user->salary, users_id});
   }
   
   if (cur_phase == Phase::Hybrid) {
@@ -216,7 +220,7 @@ size_t Engine::Read(void *ctx, int32_t select_column,
             memcpy(res, &id, 8); 
             res = (char *)res + 8;      
           } else {
-            add_res(iter->second, select_column, &res);
+            add_res(users[iter->second], select_column, &res);
           }
         }
       }
@@ -225,14 +229,9 @@ size_t Engine::Read(void *ctx, int32_t select_column,
       case Userid: {
         auto iter = idx_user_id_.find(UserIdWrapper((const char *)column_key));
         if (iter != idx_user_id_.end()) {
-          int64_t id = iter->second;
+          size_t users_id = iter->second;
           res_num = 1;
-          if (select_column == Id) { // 无需回表
-            memcpy(res, &id, 8); 
-            res = (char *)res + 8;      
-          } else {
-            add_res(idx_id_.find(id)->second, select_column, &res);
-          }
+          add_res(users[users_id], select_column, &res);
         }
       } 
       break;
@@ -248,14 +247,9 @@ size_t Engine::Read(void *ctx, int32_t select_column,
         if (hack_) {
           auto iter = hack_idx_salary_.find(salary);
           if (iter != hack_idx_salary_.end()) {
-            int64_t id = iter->second;
+            size_t users_id = iter->second;
             res_num = 1;
-            if (select_column == Id) { // 无需回表
-              memcpy(res, &id, 8); 
-              res = (char *)res + 8;      
-            } else {
-              add_res(idx_id_.find(id)->second, select_column, &res);
-            }
+            add_res(users[users_id], select_column, &res);
           }
           return 1;
         }
@@ -263,14 +257,9 @@ size_t Engine::Read(void *ctx, int32_t select_column,
         auto range = idx_salary_.equal_range(salary);
         auto iter = range.first;
         while (iter != range.second) {
-          int64_t id = iter->second;
+          size_t users_id = iter->second;
           res_num += 1;
-          if (select_column == Id) { // 无需回表
-            memcpy(res, &id, 8); 
-            res = (char *)res + 8;
-          } else {
-            add_res(idx_id_.find(id)->second, select_column, &res);
-          }
+          add_res(users[users_id], select_column, &res);
           iter++;
         }
       }
@@ -292,7 +281,7 @@ int Engine::replay_index(const std::vector<std::string> disk_path, const std::ve
   idx_id_.clear();
   idx_user_id_.clear();
   idx_salary_.clear();
-  Index_Helper index_builder(&idx_id_, &idx_user_id_, &idx_salary_);
+  Index_Helper index_builder(&idx_id_, &idx_user_id_, &idx_salary_, &users);
   for (size_t log_id = 0; log_id < disk_path.size(); log_id++) {
     Util::CreateIfNotExists(disk_path[log_id]);
     // 如果ret != 0,没有给file分配内存,因此可以让reader管理file指针的内存,reader离开作用域时，会调用reader的析构函数释放file指针的空间
