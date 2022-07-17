@@ -50,7 +50,7 @@ class Engine {
     std::vector<MmapWriter *> disk_logs_;
     std::vector<PmemWriter *> pmem_logs_;
 
-    std::vector<User> users;
+    std::vector<User> users_;
     primary_key idx_id_;
 
     unique_key idx_user_id_;

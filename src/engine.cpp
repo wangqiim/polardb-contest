@@ -16,7 +16,11 @@ const std::string phase_name[3] = {"Hybrid", "WriteOnly", "ReadOnly"};
 
 void add_res(const User &user, int32_t select_column, void **result) {
   switch(select_column) {
-    case Userid: 
+    case Id:
+      memcpy(*result, &user.id, 8);
+      *result = (char *)(*result) + 8;
+      break;
+    case Userid:
       memcpy(*result, user.user_id, 128); 
       *result = (char *)(*result)  + 128; 
       break;
@@ -29,7 +33,7 @@ void add_res(const User &user, int32_t select_column, void **result) {
       *result = (char *)(*result) + 8; 
       break;
     default: 
-      // spdlog::error("unexpected here");
+      spdlog::error("unexpected here");
       break;
   }
 }
@@ -151,8 +155,8 @@ int Engine::Append(const void *datas) {
   }
 
   if (cur_phase == Phase::Hybrid) {
-    users.push_back(*user);
-    size_t users_id = users.size() - 1;
+    users_.push_back(*user);
+    size_t users_id = users_.size() - 1;
     idx_id_.insert({user->id, users_id});
     // build uk index
     idx_user_id_.emplace(user->user_id, users_id); // avoid unneccessary copy constructer
@@ -220,7 +224,7 @@ size_t Engine::Read(void *ctx, int32_t select_column,
             memcpy(res, &id, 8); 
             res = (char *)res + 8;      
           } else {
-            add_res(users[iter->second], select_column, &res);
+            add_res(users_[iter->second], select_column, &res);
           }
         }
       }
@@ -231,7 +235,7 @@ size_t Engine::Read(void *ctx, int32_t select_column,
         if (iter != idx_user_id_.end()) {
           size_t users_id = iter->second;
           res_num = 1;
-          add_res(users[users_id], select_column, &res);
+          add_res(users_[users_id], select_column, &res);
         }
       } 
       break;
@@ -249,7 +253,7 @@ size_t Engine::Read(void *ctx, int32_t select_column,
           if (iter != hack_idx_salary_.end()) {
             size_t users_id = iter->second;
             res_num = 1;
-            add_res(users[users_id], select_column, &res);
+            add_res(users_[users_id], select_column, &res);
           }
           return 1;
         }
@@ -259,7 +263,7 @@ size_t Engine::Read(void *ctx, int32_t select_column,
         while (iter != range.second) {
           size_t users_id = iter->second;
           res_num += 1;
-          add_res(users[users_id], select_column, &res);
+          add_res(users_[users_id], select_column, &res);
           iter++;
         }
       }
@@ -281,7 +285,8 @@ int Engine::replay_index(const std::vector<std::string> disk_path, const std::ve
   idx_id_.clear();
   idx_user_id_.clear();
   idx_salary_.clear();
-  Index_Helper index_builder(&idx_id_, &idx_user_id_, &idx_salary_, &users);
+  users_.clear();
+  Index_Helper index_builder(&idx_id_, &idx_user_id_, &idx_salary_, &users_);
   for (size_t log_id = 0; log_id < disk_path.size(); log_id++) {
     Util::CreateIfNotExists(disk_path[log_id]);
     // 如果ret != 0,没有给file分配内存,因此可以让reader管理file指针的内存,reader离开作用域时，会调用reader的析构函数释放file指针的空间
