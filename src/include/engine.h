@@ -4,7 +4,7 @@
 #include <mutex>
 #include <vector>
 
-#include "robin_hood.h"
+#include "hash_table8.hpp"
 #include "user.h"
 #include "log.h"
 
@@ -13,10 +13,10 @@
 // uk : user_id 		//唯一索引
 // sk : salary			//普通索引
 
-using primary_key = robin_hood::unordered_map<int64_t, size_t>;
-using unique_key  = robin_hood::unordered_map<UserIdWrapper, size_t>;
+using primary_key = emhash8::HashMap<int64_t, size_t>;
+using unique_key  = emhash8::HashMap<UserIdWrapper, size_t>;
 using normal_key  = std::unordered_multimap<int64_t, size_t>;
-using hack_key  = robin_hood::unordered_map<int64_t, size_t>;
+using hack_key  = emhash8::HashMap<int64_t, size_t>;
 
 class Engine {
   public:
