@@ -3,6 +3,8 @@
 #include "spdlog/spdlog.h"
 #include "log.h"
 #include <unistd.h>
+#include <libpmem.h>
+#include "util.h"
 
 Writer::Writer(PosixWritableFile* dest) : dest_(dest) {}
 
@@ -229,9 +231,91 @@ MmapReader::~MmapReader() {
 }
 
 bool MmapReader::ReadRecord(char *&record, int len) {
-  static char buf[RecordSize] = {0};
   if (curr_ + len > start_ + mmap_size_) {
     spdlog::error("[ReadRecord] error");
+    exit(1);
+  }
+  if (curr_[RecordSize] != 0) {
+    record = curr_;
+    curr_ += len + CommitField;
+    return true;
+  }
+  return false;
+}
+
+//--------------------- pmem file-----------------------------------
+PmapWriter::PmapWriter(const std::string &filename, size_t mmap_size)
+    : filename_(filename), mmap_size_(mmap_size)
+    , start_(nullptr), curr_(nullptr) {
+
+  bool create_file = !Util::FileExists(filename_);
+  // 2. pmap
+  void* pmemaddr = NULL;
+	size_t mapped_len;
+	int is_pmem;
+	if ((pmemaddr = pmem_map_file(filename_.c_str(), mmap_size_,
+				PMEM_FILE_CREATE, 0666, &mapped_len, &is_pmem)) == NULL) {
+		perror("pmem_map_file");
+		exit(1);
+	}
+  if (mapped_len != mmap_size_ || is_pmem == 0) {
+    spdlog::error("[PmapReader] unexpected error happen when pmem_map_file, mapped_len: {}, is_pmem: {}", mapped_len, is_pmem);
+    exit(1);
+  }
+  start_ = reinterpret_cast<char *>(pmemaddr);
+  curr_ = start_;
+  if (create_file) {
+    pmem_memset_nodrain(start_, 0, mmap_size_);
+    pmem_drain();
+  }
+}
+
+PmapWriter::~PmapWriter() {
+  pmem_unmap(start_, mmap_size_);
+}
+
+int PmapWriter::Append(const void* data, const size_t len) {
+  pmem_memcpy_nodrain(curr_, data, len);
+  pmem_memset_nodrain(curr_ + len, 0x01, 1);
+  curr_ += len + CommitField;
+  pmem_drain();
+  return 0;
+}
+
+PmapReader::PmapReader(const std::string &filename, size_t mmap_size)
+    : filename_(filename), mmap_size_(mmap_size)
+    , start_(nullptr), curr_(nullptr) {
+
+  bool create_file = !Util::FileExists(filename_);
+  // 2. mmap
+  void* pmemaddr = NULL;
+	size_t mapped_len;
+	int is_pmem;
+	if ((pmemaddr = pmem_map_file(filename_.c_str(), mmap_size_,
+				PMEM_FILE_CREATE, 0666, &mapped_len, &is_pmem)) == NULL) {
+		perror("pmem_map_file");
+		exit(1);
+	}
+  if (mapped_len != mmap_size_ || is_pmem == 0) {
+    spdlog::error("[PmapReader] unexpected error happen when pmem_map_file, mapped_len: {}, is_pmem: {}", mapped_len, is_pmem);
+    exit(1);
+  }
+
+  start_ = reinterpret_cast<char *>(pmemaddr);
+  curr_ = start_;
+  if (create_file) {
+    pmem_memset_nodrain(start_, 0, mmap_size_);
+    pmem_drain();
+  }
+}
+
+PmapReader::~PmapReader() {
+  pmem_unmap(start_, mmap_size_);
+}
+
+bool PmapReader::ReadRecord(char *&record, int len) {
+  if (curr_ + len > start_ + mmap_size_) {
+    spdlog::error("[PmapReader] error");
     exit(1);
   }
   if (curr_[RecordSize] != 0) {
