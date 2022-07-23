@@ -185,7 +185,8 @@ MmapWriter::~MmapWriter() {
 
 int MmapWriter::Append(const void* data, const size_t len) {
   memcpy(curr_, data, len);
-  curr_ += len;
+  memset(curr_ + len, 0x01, 1);
+  curr_ += len + CommitField;
   return 0;
 }
 
@@ -233,9 +234,9 @@ bool MmapReader::ReadRecord(char *&record, int len) {
     spdlog::error("[ReadRecord] error");
     exit(1);
   }
-  if (memcmp(curr_, buf, RecordSize) != 0) {
+  if (curr_[RecordSize] != 0) {
     record = curr_;
-    curr_ += len;
+    curr_ += len + CommitField;
     return true;
   }
   return false;
