@@ -276,8 +276,7 @@ PmapWriter::~PmapWriter() {
 
 int PmapWriter::Append(const void* data, const size_t len) {
   pmem_memcpy_nodrain(curr_, data, len);
-  pmem_memset_nodrain(curr_ + len, 0x01, 1);
-  curr_ += len + CommitField;
+  curr_ += len;
   pmem_drain();
   return 0;
 }
@@ -314,13 +313,14 @@ PmapReader::~PmapReader() {
 }
 
 bool PmapReader::ReadRecord(char *&record, int len) {
+  static char buf[RecordSize] = {0};
   if (curr_ + len > start_ + mmap_size_) {
     spdlog::error("[PmapReader] error");
     exit(1);
   }
-  if (curr_[RecordSize] != 0) {
+  if (memcmp(curr_, buf, RecordSize) != 0) {
     record = curr_;
-    curr_ += len + CommitField;
+    curr_ += len;
     return true;
   }
   return false;
