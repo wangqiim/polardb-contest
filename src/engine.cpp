@@ -231,7 +231,7 @@ size_t Engine::Read(void *ctx, int32_t select_column,
       break;
 
       case Userid: {
-        auto iter = idx_user_id_.find(UserIdWrapper((const char *)column_key));
+        auto iter = idx_user_id_.find(UserIdWrapper((const char *)column_key, true));
         if (iter != idx_user_id_.end()) {
           size_t users_id = iter->second;
           res_num = 1;
