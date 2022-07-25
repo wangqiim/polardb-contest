@@ -286,6 +286,10 @@ int Engine::replay_index(const std::vector<std::string> disk_path, const std::ve
   idx_user_id_.clear();
   idx_salary_.clear();
   users_.clear();
+  idx_id_.reserve(WritePerClient * ClientNum);
+  idx_user_id_.reserve(WritePerClient * ClientNum);
+  idx_salary_.reserve(WritePerClient * ClientNum);
+  users_.reserve(WritePerClient * ClientNum);
   Index_Helper index_builder(&idx_id_, &idx_user_id_, &idx_salary_, &users_);
   for (size_t log_id = 0; log_id < disk_path.size(); log_id++) {
     Util::CreateIfNotExists(disk_path[log_id]);
