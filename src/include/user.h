@@ -74,7 +74,7 @@ public:
   }
 
   bool operator== (const UserIdWrapper &other) const {
-    return memcmp(ptr, other.ptr, UseridLen) == 0;
+    return memcmp(ptr, other.ptr, UseridLen/2) == 0;
   }
   
   bool operator< (const UserIdWrapper &other) const {
