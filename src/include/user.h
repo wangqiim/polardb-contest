@@ -74,7 +74,7 @@ namespace std {
     template <>
     struct hash<UserIdWrapper> {
         size_t operator()(const UserIdWrapper &k) const{
-          return StrHash(k.s, UseridLen);
+          return StrHash(k.s, 16);
         }
     };
 }
