@@ -14,8 +14,8 @@ const int MmapSize = (1 << 28) + (1 << 23) + (1 << 22); // 281018368 data: 27200
 // ------ engine.h -------
 const int WritePerClient = 1000000; 
 const int ClientNum = 50;
-const int SSDNum = 21;  // 在lockfree情况下，必须ClientNum = SSDNum + AEPNum
-const int AEPNum = 29;  // 在lockfree情况下，必须ClientNum = SSDNum + AEPNum
+const int SSDNum = 22;  // 在lockfree情况下，必须ClientNum = SSDNum + AEPNum
+const int AEPNum = 28;  // 在lockfree情况下，必须ClientNum = SSDNum + AEPNum
 
 const int WaitChangeFinishSecond = 3;
 const int FenceSecond = 10;
