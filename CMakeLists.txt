@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.1)
 project("interface")
-set(CMAKE_CXX_STANDARD 14)
+set(CMAKE_CXX_STANDARD 17)
 add_definitions(-D_FILE_OFFSET_BITS=64)
 add_compile_options(-fPIC)
 

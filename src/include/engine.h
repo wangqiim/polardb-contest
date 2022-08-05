@@ -4,6 +4,7 @@
 #include <mutex>
 #include <vector>
 
+#include "unordered_dense.h"
 #include "user.h"
 #include "log.h"
 
@@ -12,8 +13,8 @@
 // uk : user_id 		//唯一索引
 // sk : salary			//普通索引
 
-using primary_key = std::unordered_map<int64_t, size_t>;
-using unique_key  = std::unordered_map<UserIdWrapper, size_t>;
+using primary_key = ankerl::unordered_dense::map<int64_t, size_t>;
+using unique_key  = ankerl::unordered_dense::map<UserIdWrapper, size_t>;
 using normal_key  = std::unordered_multimap<int64_t, size_t>;
 
 class Engine {
