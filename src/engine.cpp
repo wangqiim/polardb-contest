@@ -277,7 +277,7 @@ int Engine::replay_index(const std::vector<std::string> disk_path, const std::ve
     }
   }
   for (size_t log_id = 0; log_id < pmem_path.size(); log_id++) {
-    PmapReader reader(pmem_path[log_id], MmapSize);
+    PmapReader reader(pmem_path[log_id], PoolSize);
     char *record;
     while (reader.ReadRecord(record, RecordSize)) {
       const User *user = (const User *)record;
