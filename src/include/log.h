@@ -81,7 +81,9 @@ class MmapWriter {
   int mmap_size_;
   int fd_;
   char *start_;
-  char *curr_;
+  uint64_t *commit_cnt_; // commit_cnt_ = (uint64_t *)mmap_start_ptr
+  char *data_start_; // data_start_ = (char *)mmap_start_ptr + 8
+  char *data_curr_;
 };
 
 class MmapReader {
@@ -95,7 +97,9 @@ class MmapReader {
   int mmap_size_;
   int fd_;
   char *start_;
-  char *curr_;
+  uint64_t *commit_cnt_; // commit_cnt_ = (uint64_t *)mmap_start_ptr
+  char *data_start_; // data_start_ = (char *)mmap_start_ptr + 8
+  char *data_curr_;
 };
 
 //--------------------- pmem mmap file-----------------------------------

@@ -148,8 +148,8 @@ int PmemWriter::Append(const void* data, const size_t len) {
 
 //--------------------- mmap file-----------------------------------
 MmapWriter::MmapWriter(const std::string &filename, int mmap_size)
-    : filename_(filename), mmap_size_(mmap_size), fd_(-1)
-    , start_(nullptr), curr_(nullptr) {
+    : filename_(filename), mmap_size_(mmap_size), fd_(-1), start_(nullptr)
+    , commit_cnt_(nullptr), data_start_(nullptr), data_curr_(nullptr) {
   // 1. open fd; (must have been create)
   fd_ = open(filename_.c_str(), O_RDWR, 0644);
   if (fd_ < 0) {
@@ -173,11 +173,13 @@ MmapWriter::MmapWriter(const std::string &filename, int mmap_size)
     spdlog::error("[MmapWriter] mmap failed, errno is {}", strerror(errno));
     exit(1);
   }
-  start_ = reinterpret_cast<char *>(ptr);
-  curr_ = start_;
   if (off == 0) {
-    memset(start_, 0, mmap_size_);
+    memset(ptr, 0, mmap_size_);
   }
+  start_ = reinterpret_cast<char *>(ptr);
+  commit_cnt_ = reinterpret_cast<uint64_t *>(start_);
+  data_start_ = start_ + 8;
+  data_curr_ = data_start_;
 }
 
 MmapWriter::~MmapWriter() {
@@ -186,15 +188,16 @@ MmapWriter::~MmapWriter() {
 }
 
 int MmapWriter::Append(const void* data, const size_t len) {
-  memcpy(curr_, data, len);
-  memset(curr_ + len, 0x01, 1);
-  curr_ += len + CommitField;
+  // todo(wq): maybe coredump (append total len greater than mmap_size)
+  memcpy(data_curr_, data, len);
+  *commit_cnt_ = *commit_cnt_ + 1;
+  data_curr_ += len;
   return 0;
 }
 
 MmapReader::MmapReader(const std::string &filename, int mmap_size)
-    : filename_(filename), mmap_size_(mmap_size), fd_(-1)
-    , start_(nullptr), curr_(nullptr) {
+    : filename_(filename), mmap_size_(mmap_size), fd_(-1), start_(nullptr)
+    , commit_cnt_(nullptr), data_start_(nullptr), data_curr_(nullptr) {
   // 1. open fd; (must have been create)
   fd_ = open(filename_.c_str(), O_RDWR, 0644);
   if (fd_ < 0) {
@@ -218,11 +221,13 @@ MmapReader::MmapReader(const std::string &filename, int mmap_size)
     spdlog::error("[MmapReader] mmap failed, errno is {}", strerror(errno));
     exit(1);
   }
-  start_ = reinterpret_cast<char *>(ptr);
-  curr_ = start_;
   if (off == 0) {
-    memset(start_, 0, mmap_size_);
+    memset(ptr, 0, mmap_size_);
   }
+  start_ = reinterpret_cast<char *>(ptr);
+  commit_cnt_ = reinterpret_cast<uint64_t *>(start_);
+  data_start_ = start_ + 8;
+  data_curr_ = data_start_;
 }
 
 MmapReader::~MmapReader() {
@@ -231,13 +236,13 @@ MmapReader::~MmapReader() {
 }
 
 bool MmapReader::ReadRecord(char *&record, int len) {
-  if (curr_ + len > start_ + mmap_size_) {
-    spdlog::error("[ReadRecord] error");
+  if (data_curr_ + len > start_ + mmap_size_) {
+    spdlog::error("[ReadRecord] read overflow mmap_size error");
     exit(1);
   }
-  if (curr_[RecordSize] != 0) {
-    record = curr_;
-    curr_ += len + CommitField;
+  if (static_cast<uint64_t>(data_curr_ - data_start_) / RecordSize < *commit_cnt_) {
+    record = data_curr_;
+    data_curr_ += len;
     return true;
   }
   return false;
