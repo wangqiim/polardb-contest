@@ -267,7 +267,6 @@ int Engine::replay_index(const std::vector<std::string> disk_path, const std::ve
   users_.reserve(WritePerClient * ClientNum);
   Index_Helper index_builder(&idx_id_, &idx_user_id_, &idx_salary_, &users_);
   for (size_t log_id = 0; log_id < disk_path.size(); log_id++) {
-    Util::CreateIfNotExists(disk_path[log_id]);
     // 如果ret != 0,没有给file分配内存,因此可以让reader管理file指针的内存,reader离开作用域时，会调用reader的析构函数释放file指针的空间
     MmapReader reader(disk_path[log_id], MmapSize);
     char *record;

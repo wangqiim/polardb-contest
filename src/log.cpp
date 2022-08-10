@@ -179,7 +179,8 @@ MmapWriter::MmapWriter(const std::string &filename, int mmap_size)
   start_ = reinterpret_cast<char *>(ptr);
   commit_cnt_ = reinterpret_cast<uint64_t *>(start_);
   data_start_ = start_ + 8;
-  data_curr_ = data_start_;
+  uint64_t record_num_per_round_buffer = (mmap_size_ - 8) / RecordSize;
+  data_curr_ = data_start_ + (*commit_cnt_ % record_num_per_round_buffer) * RecordSize;
 }
 
 MmapWriter::~MmapWriter() {
@@ -188,7 +189,9 @@ MmapWriter::~MmapWriter() {
 }
 
 int MmapWriter::Append(const void* data, const size_t len) {
-  // todo(wq): maybe coredump (append total len greater than mmap_size)
+  if (data_curr_ + len > start_ + mmap_size_) {
+    return -1;
+  }
   memcpy(data_curr_, data, len);
   *commit_cnt_ = *commit_cnt_ + 1;
   data_curr_ += len;
@@ -198,7 +201,8 @@ int MmapWriter::Append(const void* data, const size_t len) {
 MmapReader::MmapReader(const std::string &filename, int mmap_size)
     : filename_(filename), mmap_size_(mmap_size), fd_(-1), start_(nullptr)
     , commit_cnt_(nullptr), data_start_(nullptr), data_curr_(nullptr) {
-  // 1. open fd; (must have been create)
+  Util::CreateIfNotExists(filename_);
+  // 1. open fd;
   fd_ = open(filename_.c_str(), O_RDWR, 0644);
   if (fd_ < 0) {
     spdlog::error("[MmapReader] can't open file {}", filename_);
@@ -329,4 +333,115 @@ bool PmapReader::ReadRecord(char *&record, int len) {
     return true;
   }
   return false;
+}
+
+PmapBufferWriter::PmapBufferWriter(const std::string &filename, size_t pool_size)
+    : mmap_writer_(nullptr), pool_size_(pool_size), start_(nullptr), curr_(nullptr) {
+
+  buff_filename_ = filename + PmapBufferWriterFileNameSuffix;
+  pmem_filename_ = filename;
+  mmap_writer_ = new MmapWriter(buff_filename_, PmapBufferWriterFileSize);
+
+  bool create_file = !Util::FileExists(pmem_filename_);
+  // 2. pmap
+  void* pmemaddr = NULL;
+	size_t mapped_len;
+	int is_pmem;
+	if ((pmemaddr = pmem_map_file(pmem_filename_.c_str(), pool_size_,
+				PMEM_FILE_CREATE, 0666, &mapped_len, &is_pmem)) == NULL) {
+		perror("pmem_map_file");
+		exit(1);
+	}
+  if (mapped_len != pool_size_ || is_pmem == 0) {
+    spdlog::warn("[PmapReader] unexpected error happen when pmem_map_file, mapped_len: {}, is_pmem: {}", mapped_len, is_pmem);
+  }
+  start_ = reinterpret_cast<char *>(pmemaddr);
+  curr_ = start_;
+  if (create_file) {
+    pmem_memset_nodrain(start_, 0, pool_size_);
+    pmem_drain();
+  }
+}
+
+PmapBufferWriter::~PmapBufferWriter() {
+  // don't need to flush buffer (mmap always there, havn't disappear)
+  delete mmap_writer_;
+  pmem_unmap(start_, pool_size_);
+}
+
+int PmapBufferWriter::Append(const void* data, const size_t len) {
+  if (mmap_writer_->Append(data, len) == 0) {
+    return 0;
+  }
+  // flush buffer
+  pmem_memcpy_nodrain(curr_, mmap_writer_->Data(), mmap_writer_->Bytes());
+  mmap_writer_->Reset();
+  curr_ += mmap_writer_->Bytes();
+  pmem_drain();
+
+  // must success!! (ret == 0)
+  mmap_writer_->Append(data, len);
+  return 0;
+}
+
+PmapBufferReader::PmapBufferReader(const std::string &filename, size_t pool_size)
+    : mmap_reader_(nullptr), pool_size_(pool_size)
+    , start_(nullptr), curr_(nullptr), must_have_flush_cnt_(0) {
+
+  buff_filename_ = filename + PmapBufferWriterFileNameSuffix;
+  pmem_filename_ = filename;
+  mmap_reader_ = new MmapReader(buff_filename_, PmapBufferWriterFileSize);
+
+  bool create_file = !Util::FileExists(pmem_filename_);
+  // 2. mmap
+  void* pmemaddr = NULL;
+	size_t mapped_len;
+	int is_pmem;
+	if ((pmemaddr = pmem_map_file(pmem_filename_.c_str(), pool_size_,
+				PMEM_FILE_CREATE, 0666, &mapped_len, &is_pmem)) == NULL) {
+		perror("pmem_map_file");
+		exit(1);
+	}
+  if (mapped_len != pool_size_ || is_pmem == 0) {
+    spdlog::error("[PmapBufferReader] unexpected error happen when pmem_map_file, mapped_len: {}, is_pmem: {}", mapped_len, is_pmem);
+    exit(1);
+  }
+
+  start_ = reinterpret_cast<char *>(pmemaddr);
+  curr_ = start_;
+  if (create_file) {
+    pmem_memset_nodrain(start_, 0, pool_size_);
+    pmem_drain();
+  }
+
+  must_have_flush_cnt_ = mmap_reader_->CommitCnt() - mmap_reader_->CommitCnt() % PmapBufferWriterSize;
+  read_cnt_ = 0;
+}
+
+PmapBufferReader::~PmapBufferReader() {
+  delete mmap_reader_;
+  pmem_unmap(start_, pool_size_);
+}
+
+bool PmapBufferReader::ReadRecord(char *&record, int len) {
+  if (curr_ + len > start_ + pool_size_) {
+    spdlog::error("[PmapBufferReader] error");
+    exit(1);
+  }
+  // 1. reader from pmem
+  if (read_cnt_ < must_have_flush_cnt_) {
+    record = curr_;
+    curr_ += len;
+    read_cnt_++;
+    return true;
+  }
+  // 2. read from mmap buffer
+  // 因为封装的mmap_reader作为buffer重复利用，因此mmap_reader中的commit_cnt_作为所有record的个数，
+  // 因此mmap_reader_->ReadRecord的返回值不可信，可能溢出coredump, 需要在调用之前做判断
+  if (read_cnt_ >= mmap_reader_->CommitCnt()) {
+    return false;
+  }
+  mmap_reader_->ReadRecord(record, len);
+  read_cnt_++;
+  return true;
 }

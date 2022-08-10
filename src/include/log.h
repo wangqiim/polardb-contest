@@ -76,6 +76,12 @@ class MmapWriter {
   MmapWriter& operator=(const MmapWriter&) = delete;
 
   int Append(const void* data, const size_t len);
+
+  int GetCommitCnt() { return *commit_cnt_; }
+  int Bytes() { return data_curr_ - data_start_; }
+  char* Data() { return data_start_; }
+  void Reset() { data_curr_ = data_start_; }
+  
  private:
   const std::string filename_;
   int mmap_size_;
@@ -92,6 +98,10 @@ class MmapReader {
   ~MmapReader();
 
   bool ReadRecord(char *&record, int len);
+
+  uint64_t CommitCnt() { return *commit_cnt_; }
+  char* Data() { return data_start_; }
+  
  private:
   const std::string filename_;
   int mmap_size_;
@@ -130,4 +140,46 @@ class PmapReader {
   size_t mmap_size_;
   char *start_;
   char *curr_;
+};
+
+//--------------------- pmem Buffer Writer-----------------------------------
+class PmapBufferWriter {
+ public:
+  PmapBufferWriter() = delete;
+  PmapBufferWriter(const PmapBufferWriter&) = delete;
+  PmapBufferWriter& operator=(const PmapBufferWriter&) = delete;
+  
+  PmapBufferWriter(const std::string &filename, size_t pool_size);
+  ~PmapBufferWriter();
+
+  int Append(const void* data, const size_t len);
+ private:
+  std::string buff_filename_;
+  std::string pmem_filename_;
+
+  MmapWriter *mmap_writer_; // buffer writer
+  size_t pool_size_;
+  char *start_;
+  char *curr_;
+};
+
+class PmapBufferReader {
+ public:
+  PmapBufferReader(const std::string &filename, size_t pool_size);
+  ~PmapBufferReader();
+
+  bool ReadRecord(char *&record, int len);
+ private:
+  std::string buff_filename_;
+  std::string pmem_filename_;
+
+  MmapReader *mmap_reader_; // buffer writer
+  size_t pool_size_;
+  char *start_;
+  char *curr_;
+
+  // when read, if have read cnt < must_have_flush_cnt_, read from pmem
+  // else read from buffer (mmap_reader_)
+  uint64_t must_have_flush_cnt_; 
+  uint64_t read_cnt_;
 };
