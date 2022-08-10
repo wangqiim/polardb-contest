@@ -87,15 +87,15 @@ Engine::Engine(const char* aep_dir, const char* disk_dir)
 }
 
 Engine::~Engine() {
+  auto end = std::chrono::system_clock::now();
+  std::chrono::duration<double> elapsed_seconds = end-start_;
+  spdlog::info("since init done, elapsed time: {}s", elapsed_seconds.count());
   for (size_t i = 0; i < disk_logs_.size(); i++) {
     delete disk_logs_[i];
   }
   for (size_t i = 0; i < pmem_logs_.size(); i++) {
     delete pmem_logs_[i];
   }
-  auto end = std::chrono::system_clock::now();
-  std::chrono::duration<double> elapsed_seconds = end-start_;
-  spdlog::info("since init done, elapsed time: {}s", elapsed_seconds.count());
 }
 
 int Engine::Init() {
