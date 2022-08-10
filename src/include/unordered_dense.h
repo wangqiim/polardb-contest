@@ -159,7 +159,7 @@ static inline void mum(uint64_t* a, uint64_t* b) {
     uint64_t seed = secret[0];
     uint64_t a{};
     uint64_t b{};
-    if (ANKERL_UNORDERED_DENSE_LIKELY(len <= 16)) {
+    if (ANKERL_UNORDERED_DENSE_UNLIKELY(len <= 16)) {
         if (ANKERL_UNORDERED_DENSE_LIKELY(len >= 4)) {
             a = (r4(p) << 32U) | r4(p + ((len >> 3U) << 2U));
             b = (r4(p + len - 4) << 32U) | r4(p + len - 4 - ((len >> 3U) << 2U));
@@ -172,7 +172,7 @@ static inline void mum(uint64_t* a, uint64_t* b) {
         }
     } else {
         size_t i = len;
-        if (ANKERL_UNORDERED_DENSE_UNLIKELY(i > 48)) {
+        if (ANKERL_UNORDERED_DENSE_LIKELY(i > 48)) {
             uint64_t see1 = seed;
             uint64_t see2 = seed;
             do {
@@ -184,7 +184,7 @@ static inline void mum(uint64_t* a, uint64_t* b) {
             } while (ANKERL_UNORDERED_DENSE_LIKELY(i > 48));
             seed ^= see1 ^ see2;
         }
-        while (ANKERL_UNORDERED_DENSE_UNLIKELY(i > 16)) {
+        while (ANKERL_UNORDERED_DENSE_LIKELY(i > 16)) {
             seed = mix(r8(p) ^ secret[1], r8(p + 8) ^ seed);
             i -= 16;
             p += 16;

@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <string>
+#include <unordered_dense.h>
 
 uint32_t StrHash(const char* s, int size);
 
@@ -55,7 +56,7 @@ namespace std {
     template <>
     struct hash<UserIdWrapper> {
         size_t operator()(const UserIdWrapper &k) const{
-          return StrHash(k.s, UseridLen);
+          return ankerl::unordered_dense::detail::wyhash::hash(k.s, UseridLen);
         }
     };
 }
