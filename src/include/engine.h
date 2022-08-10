@@ -47,7 +47,7 @@ class Engine {
     const std::string aep_dir_;
     const std::string dir_;
     std::vector<MmapWriter *> disk_logs_;
-    std::vector<PmapWriter *> pmem_logs_;
+    std::vector<PmapBufferWriter *> pmem_logs_;
 
     std::vector<User> users_;
     primary_key idx_id_;

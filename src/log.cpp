@@ -253,88 +253,6 @@ bool MmapReader::ReadRecord(char *&record, int len) {
 }
 
 //--------------------- pmem file-----------------------------------
-PmapWriter::PmapWriter(const std::string &filename, size_t mmap_size)
-    : filename_(filename), mmap_size_(mmap_size)
-    , start_(nullptr), curr_(nullptr) {
-
-  bool create_file = !Util::FileExists(filename_);
-  // 2. pmap
-  void* pmemaddr = NULL;
-	size_t mapped_len;
-	int is_pmem;
-	if ((pmemaddr = pmem_map_file(filename_.c_str(), mmap_size_,
-				PMEM_FILE_CREATE, 0666, &mapped_len, &is_pmem)) == NULL) {
-		perror("pmem_map_file");
-		exit(1);
-	}
-  if (mapped_len != mmap_size_ || is_pmem == 0) {
-    spdlog::error("[PmapReader] unexpected error happen when pmem_map_file, mapped_len: {}, is_pmem: {}", mapped_len, is_pmem);
-    exit(1);
-  }
-  start_ = reinterpret_cast<char *>(pmemaddr);
-  curr_ = start_;
-  if (create_file) {
-    pmem_memset_nodrain(start_, 0, mmap_size_);
-    pmem_drain();
-  }
-}
-
-PmapWriter::~PmapWriter() {
-  pmem_unmap(start_, mmap_size_);
-}
-
-int PmapWriter::Append(const void* data, const size_t len) {
-  pmem_memcpy_nodrain(curr_, data, len);
-  curr_ += len;
-  pmem_drain();
-  return 0;
-}
-
-PmapReader::PmapReader(const std::string &filename, size_t mmap_size)
-    : filename_(filename), mmap_size_(mmap_size)
-    , start_(nullptr), curr_(nullptr) {
-
-  bool create_file = !Util::FileExists(filename_);
-  // 2. mmap
-  void* pmemaddr = NULL;
-	size_t mapped_len;
-	int is_pmem;
-	if ((pmemaddr = pmem_map_file(filename_.c_str(), mmap_size_,
-				PMEM_FILE_CREATE, 0666, &mapped_len, &is_pmem)) == NULL) {
-		perror("pmem_map_file");
-		exit(1);
-	}
-  if (mapped_len != mmap_size_ || is_pmem == 0) {
-    spdlog::error("[PmapReader] unexpected error happen when pmem_map_file, mapped_len: {}, is_pmem: {}", mapped_len, is_pmem);
-    exit(1);
-  }
-
-  start_ = reinterpret_cast<char *>(pmemaddr);
-  curr_ = start_;
-  if (create_file) {
-    pmem_memset_nodrain(start_, 0, mmap_size_);
-    pmem_drain();
-  }
-}
-
-PmapReader::~PmapReader() {
-  pmem_unmap(start_, mmap_size_);
-}
-
-bool PmapReader::ReadRecord(char *&record, int len) {
-  static char buf[RecordSize] = {0};
-  if (curr_ + len > start_ + mmap_size_) {
-    spdlog::error("[PmapReader] error");
-    exit(1);
-  }
-  if (memcmp(curr_, buf, RecordSize) != 0) {
-    record = curr_;
-    curr_ += len;
-    return true;
-  }
-  return false;
-}
-
 PmapBufferWriter::PmapBufferWriter(const std::string &filename, size_t pool_size)
     : mmap_writer_(nullptr), pool_size_(pool_size), start_(nullptr), curr_(nullptr) {
 
@@ -356,7 +274,11 @@ PmapBufferWriter::PmapBufferWriter(const std::string &filename, size_t pool_size
     spdlog::warn("[PmapReader] unexpected error happen when pmem_map_file, mapped_len: {}, is_pmem: {}", mapped_len, is_pmem);
   }
   start_ = reinterpret_cast<char *>(pmemaddr);
-  curr_ = start_;
+  const uint64_t record_num_per_round_buffer = (PmapBufferWriterSize) / RecordSize;
+  // 每次刷的字节数
+  const uint64_t bytes_per_round_buffer = record_num_per_round_buffer * RecordSize;
+  curr_ = start_ + (mmap_writer_->GetCommitCnt() / record_num_per_round_buffer) * bytes_per_round_buffer;
+
   if (create_file) {
     pmem_memset_nodrain(start_, 0, pool_size_);
     pmem_drain();
@@ -375,9 +297,9 @@ int PmapBufferWriter::Append(const void* data, const size_t len) {
   }
   // flush buffer
   pmem_memcpy_nodrain(curr_, mmap_writer_->Data(), mmap_writer_->Bytes());
-  mmap_writer_->Reset();
   curr_ += mmap_writer_->Bytes();
   pmem_drain();
+  mmap_writer_->Reset();
 
   // must success!! (ret == 0)
   mmap_writer_->Append(data, len);
@@ -403,8 +325,7 @@ PmapBufferReader::PmapBufferReader(const std::string &filename, size_t pool_size
 		exit(1);
 	}
   if (mapped_len != pool_size_ || is_pmem == 0) {
-    spdlog::error("[PmapBufferReader] unexpected error happen when pmem_map_file, mapped_len: {}, is_pmem: {}", mapped_len, is_pmem);
-    exit(1);
+    spdlog::warn("[PmapBufferReader] unexpected error happen when pmem_map_file, mapped_len: {}, is_pmem: {}", mapped_len, is_pmem);
   }
 
   start_ = reinterpret_cast<char *>(pmemaddr);
@@ -413,8 +334,13 @@ PmapBufferReader::PmapBufferReader(const std::string &filename, size_t pool_size
     pmem_memset_nodrain(start_, 0, pool_size_);
     pmem_drain();
   }
-
-  must_have_flush_cnt_ = mmap_reader_->CommitCnt() - mmap_reader_->CommitCnt() % PmapBufferWriterSize;
+  uint64_t record_num_per_round_buffer = PmapBufferWriterSize / RecordSize;
+  if (mmap_reader_->CommitCnt() != 0 && mmap_reader_->CommitCnt() % record_num_per_round_buffer == 0) {
+    // 当buffer刚刚写满时，下一次写，才会刷buffer到pmem中
+    must_have_flush_cnt_ = mmap_reader_->CommitCnt() - record_num_per_round_buffer;
+  } else {
+    must_have_flush_cnt_ = mmap_reader_->CommitCnt() - mmap_reader_->CommitCnt() % record_num_per_round_buffer;
+  }
   read_cnt_ = 0;
 }
 

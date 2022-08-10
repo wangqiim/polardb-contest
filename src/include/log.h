@@ -112,36 +112,6 @@ class MmapReader {
   char *data_curr_;
 };
 
-//--------------------- pmem mmap file-----------------------------------
-class PmapWriter {
- public:
-  PmapWriter() = delete;
-  PmapWriter(const std::string &filename, size_t mmap_size);
-  ~PmapWriter();
-  PmapWriter(const PmapWriter&) = delete;
-  PmapWriter& operator=(const PmapWriter&) = delete;
-
-  int Append(const void* data, const size_t len);
- private:
-  const std::string filename_;
-  size_t mmap_size_;
-  char *start_;
-  char *curr_;
-};
-
-class PmapReader {
- public:
-  PmapReader(const std::string &filename, size_t mmap_size);
-  ~PmapReader();
-
-  bool ReadRecord(char *&record, int len);
- private:
-  const std::string filename_;
-  size_t mmap_size_;
-  char *start_;
-  char *curr_;
-};
-
 //--------------------- pmem Buffer Writer-----------------------------------
 class PmapBufferWriter {
  public:

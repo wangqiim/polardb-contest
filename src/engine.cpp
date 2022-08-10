@@ -276,7 +276,7 @@ int Engine::replay_index(const std::vector<std::string> disk_path, const std::ve
     }
   }
   for (size_t log_id = 0; log_id < pmem_path.size(); log_id++) {
-    PmapReader reader(pmem_path[log_id], PoolSize);
+    PmapBufferReader reader(pmem_path[log_id], PoolSize);
     char *record;
     while (reader.ReadRecord(record, RecordSize)) {
       const User *user = (const User *)record;
@@ -311,12 +311,11 @@ for (size_t i = 0; i < disk_logs_.size(); i++) {
 }
 
 int Engine::open_all_writers() {
-  PosixWritableFile *walfile = nullptr;
   for (const auto &fname: disk_file_paths_) {
     disk_logs_.push_back(new MmapWriter(fname, MmapSize));
   }
   for (const auto &fname: pmem_file_paths_) {
-    pmem_logs_.push_back(new PmapWriter(fname, PoolSize));
+    pmem_logs_.push_back(new PmapBufferWriter(fname, PoolSize));
   }
   return 0;
 }
