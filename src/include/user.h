@@ -60,3 +60,53 @@ namespace std {
         }
     };
 }
+
+
+class LocationsWrapper {
+public:
+  LocationsWrapper(): size_(0), next_(nullptr) {};
+  ~LocationsWrapper() {
+    if (next_) {
+      delete next_;
+    }
+  }
+
+  LocationsWrapper(LocationsWrapper &&others) {
+    loc_ = others.loc_;
+    size_ = others.size_;
+    next_ = others.next_;
+    others.loc_ = 0;
+    others.size_ = 0;
+    others.next_ = nullptr;
+  };
+
+  LocationsWrapper(const LocationsWrapper&) = delete;
+  LocationsWrapper& operator=(const LocationsWrapper&) = delete;
+
+  void Push(size_t loc) {
+    if (0 == size_) {
+      loc_ = loc;
+    } else {
+      if (size_ == 1) {
+        next_ = new std::vector<size_t>();
+      }
+      next_->push_back(loc);
+    }
+    size_++;
+  }
+
+  size_t Size() { return size_; }
+
+  // without bound check!!
+  size_t& operator[](size_t index) {
+    if (index == 0) {
+      return loc_;
+    }
+    return next_->at(index - 1);
+  }
+
+private:
+  size_t loc_;
+  size_t size_;
+  std::vector<size_t> *next_;
+};

@@ -15,7 +15,7 @@
 
 using primary_key = ankerl::unordered_dense::map<int64_t, size_t>;
 using unique_key  = ankerl::unordered_dense::map<UserIdWrapper, size_t>;
-using normal_key  = std::unordered_multimap<int64_t, size_t>;
+using normal_key  = ankerl::unordered_dense::map<int64_t, LocationsWrapper>;
 
 class Engine {
   public:

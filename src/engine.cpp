@@ -69,7 +69,8 @@ void Index_Helper::Scan(const User *user) {
   // build uk index
   idx_user_id_->insert({UserIdWrapper(user->user_id), record_slot});
   // build nk index
-  idx_salary_->insert({user->salary, record_slot});
+  auto &locations = (*idx_salary_)[user->salary];
+  locations.Push(record_slot);
   count_++;
 }
 
@@ -154,7 +155,9 @@ int Engine::Append(const void *datas) {
     idx_user_id_.emplace(user->user_id, record_slot); // avoid unneccessary copy constructer
 
     // build nk index
-    idx_salary_.insert({user->salary, record_slot});
+    
+    LocationsWrapper &locations = idx_salary_[user->salary];
+    locations.Push(record_slot);
   }
   
   if (cur_phase == Phase::Hybrid) {
@@ -234,12 +237,12 @@ size_t Engine::Read(void *ctx, int32_t select_column,
 
       case Salary: {
         int64_t salary = *((int64_t *)column_key);
-        auto range = idx_salary_.equal_range(salary);
-        auto iter = range.first;
-        while (iter != range.second) {
-          res_num += 1;
-          add_res(users_[iter->second], select_column, &res);
-          iter++;
+        auto iter = idx_salary_.find(salary);
+        if (iter != idx_salary_.end()) {
+          for (size_t i = 0; i < iter->second.Size(); i++) {
+            res_num += 1;
+            add_res(users_[iter->second[i]], select_column, &res);
+          }
         }
       }
       break;
