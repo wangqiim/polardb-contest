@@ -67,7 +67,7 @@ void Index_Helper::Scan(const User *user) {
   // build pk index
   idx_id_->insert({user->id, record_slot});
   // build uk index
-  idx_user_id_->insert({UserIdWrapper(user->user_id), record_slot});
+  idx_user_id_->emplace(BlizardHashWrapper(user->user_id, UseridLen), record_slot);
   // build nk index
   auto &locations = (*idx_salary_)[user->salary];
   locations.Push(record_slot);
@@ -152,7 +152,7 @@ int Engine::Append(const void *datas) {
     size_t record_slot = users_.size() - 1;
     idx_id_.insert({user->id, record_slot});
     // build uk index
-    idx_user_id_.emplace(user->user_id, record_slot); // avoid unneccessary copy constructer
+    idx_user_id_.emplace(BlizardHashWrapper(user->user_id, UseridLen), record_slot); // avoid unneccessary copy constructer
 
     // build nk index
     
@@ -222,7 +222,7 @@ size_t Engine::Read(void *ctx, int32_t select_column,
       break;
 
       case Userid: {
-        auto iter = idx_user_id_.find(*reinterpret_cast<const UserIdWrapper*>(column_key));
+        auto iter = idx_user_id_.find(BlizardHashWrapper(reinterpret_cast<const char*>(column_key), UseridLen));
         if (iter != idx_user_id_.end()) {
           res_num = 1;
           add_res(users_[iter->second], select_column, &res);

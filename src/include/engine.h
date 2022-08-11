@@ -14,7 +14,7 @@
 // sk : salary			//普通索引
 
 using primary_key = ankerl::unordered_dense::map<int64_t, size_t>;
-using unique_key  = ankerl::unordered_dense::map<UserIdWrapper, size_t>;
+using unique_key  = ankerl::unordered_dense::map<BlizardHashWrapper, size_t>;
 using normal_key  = ankerl::unordered_dense::map<int64_t, LocationsWrapper>;
 
 class Engine {

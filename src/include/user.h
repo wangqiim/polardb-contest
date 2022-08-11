@@ -110,3 +110,31 @@ private:
   size_t size_;
   std::vector<size_t> *next_;
 };
+
+class BlizardHashWrapper {
+public:
+  BlizardHashWrapper(const char *str, size_t len)
+    : hash1_(ankerl::unordered_dense::detail::wyhash::hash(str, len)) {
+  }
+
+  BlizardHashWrapper(BlizardHashWrapper &&other) {
+    hash1_ = other.hash1_;
+  }
+
+  size_t Hash() const { return hash1_; }
+
+  bool operator==(const BlizardHashWrapper &other) const {
+    return hash1_ == other.hash1_;
+  }
+private:
+  size_t hash1_;
+};
+
+namespace std {
+    template <>
+    struct hash<BlizardHashWrapper> {
+        size_t operator()(const BlizardHashWrapper &k) const{
+          return k.Hash();
+        }
+    };
+}
