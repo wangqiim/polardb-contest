@@ -123,7 +123,7 @@ private:
 class BlizardHashWrapper {
 public:
   BlizardHashWrapper(const char *str, size_t len)
-    : hash1_(ankerl::unordered_dense::detail::wyhash::hash(str, len)) {
+    : hash1_(ankerl::unordered_dense::detail::wyhash::hash(str, len / 4)) {
   }
 
   BlizardHashWrapper(BlizardHashWrapper &&other) {
