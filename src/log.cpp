@@ -288,6 +288,7 @@ PmapBufferWriter::PmapBufferWriter(const std::string &filename, size_t pool_size
 PmapBufferWriter::~PmapBufferWriter() {
   // don't need to flush buffer (mmap always there, havn't disappear)
   delete mmap_writer_;
+  pmem_drain();
   pmem_unmap(start_, pool_size_);
 }
 
