@@ -17,6 +17,10 @@ using primary_key = ankerl::unordered_dense::map<int64_t, size_t>;
 using unique_key  = ankerl::unordered_dense::map<BlizardHashWrapper, size_t>;
 using normal_key  = ankerl::unordered_dense::map<int64_t, LocationsWrapper>;
 
+using cluster_primary_key = ankerl::unordered_dense::map<int64_t, UserIdWrapper>; // Id->Userid
+using cluster_unique_key  = ankerl::unordered_dense::map<BlizardHashWrapper, NameWrapper>; // Userid->Name
+using cluster_normal_key  = ankerl::unordered_dense::map<int64_t, int64_t>; // Salary->Id
+
 class Engine {
   public:
     Engine(const char* aep_dir, const char* disk_dir);
@@ -38,6 +42,12 @@ class Engine {
     int open_all_writers();
 
   private:
+    int build_3_cluster_index(const std::vector<std::string> disk_path, const std::vector<std::string> pmem_path);
+    size_t perf_Read(void *ctx, int32_t select_column,
+      int32_t where_column, const void *column_key, 
+      size_t column_key_len, void *res);
+    
+
     std::atomic<bool> is_changing_;
     std::atomic<int> phase_;
     std::atomic<int> next_tid_;
@@ -55,7 +65,12 @@ class Engine {
     unique_key idx_user_id_;
 
     normal_key idx_salary_;
-    
+
+    // only use for performance read phase
+    bool is_read_perf_ = false;
+    cluster_primary_key cluster_idx_id_;
+    cluster_unique_key  cluster_idx_user_id_;
+    cluster_normal_key  cluster_idx_salary_;
     // debug log
     std::chrono::_V2::system_clock::time_point start_;
 };

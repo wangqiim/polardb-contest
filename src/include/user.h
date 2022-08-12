@@ -62,6 +62,15 @@ namespace std {
 }
 
 
+const int NameLen = 128;
+class NameWrapper { // 比字符串作为key省不少空间
+public:
+  char s[NameLen];
+  NameWrapper(const char *t) {
+    for (int i = 0; i < NameLen; i++) s[i] = t[i];
+  }
+};
+
 class LocationsWrapper {
 public:
   LocationsWrapper(): size_(0), next_(nullptr) {};

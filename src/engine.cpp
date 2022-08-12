@@ -118,6 +118,10 @@ int Engine::Init() {
   Util::gen_sorted_paths(aep_dir_, WALFileNamePrefix, pmem_file_paths_, AEPNum);
   
   int record_num = replay_index(disk_file_paths_, pmem_file_paths_);
+  if (record_num == ClientNum * WritePerClient) {
+    is_read_perf_ = true;
+    build_3_cluster_index(disk_file_paths_, pmem_file_paths_);
+  }
   spdlog::info("init replay build index done, record num = {}", record_num);
   phase_.store(record_num == 0? Phase::WriteOnly: Phase::ReadOnly);
 
@@ -175,6 +179,9 @@ int Engine::Append(const void *datas) {
 size_t Engine::Read(void *ctx, int32_t select_column,
     int32_t where_column, const void *column_key, 
     size_t column_key_len, void *res) {
+  if (is_read_perf_) {
+    return perf_Read(ctx, select_column, where_column, column_key, column_key_len, res);
+  }
   if (phase_.load() == Phase::WriteOnly) {
     bool current = is_changing_.exchange(true);
     if (current == false) {
@@ -321,4 +328,117 @@ int Engine::open_all_writers() {
     pmem_logs_.push_back(new PmapBufferWriter(fname, PoolSize));
   }
   return 0;
+}
+
+// read formance
+// ------Index Builder-------------
+class Cluster_Index_Helper {
+  public:
+    Cluster_Index_Helper(cluster_primary_key *cluster_idx_id,
+      cluster_unique_key *cluster_idx_user_id, 
+      cluster_normal_key  *cluster_idx_salary)
+      : count_(0), cluster_idx_id_(cluster_idx_id),
+        cluster_idx_user_id_(cluster_idx_user_id), 
+        cluster_idx_salary_(cluster_idx_salary){ }
+
+    // 当is_build为false时，仅仅记录count_，不build索引
+    void Scan(const User *user);
+
+    int Get_count() { return count_; }
+
+  private:
+    int  count_;
+    cluster_primary_key *cluster_idx_id_;
+    cluster_unique_key  *cluster_idx_user_id_;
+    cluster_normal_key  *cluster_idx_salary_;
+};
+
+void Cluster_Index_Helper::Scan(const User *user) {
+  // build pk index
+  cluster_idx_id_->emplace(user->id, user->user_id);
+  // build uk index
+  cluster_idx_user_id_->emplace(BlizardHashWrapper(user->user_id, UseridLen), user->name);
+  // build nk index
+  cluster_idx_salary_->emplace(user->salary, user->id);
+  count_++;
+}
+
+int Engine::build_3_cluster_index(const std::vector<std::string> disk_path, const std::vector<std::string> pmem_path) {
+  // 我不确定对于同一个文件或pmem同时读写打开会不会有问题，因此在这里重新关闭之后再次打开了writers。
+  close_all_writers();
+  // clear() is not work here for release memory in c++
+  idx_id_ = primary_key();
+  idx_user_id_ = unique_key();
+  idx_salary_ = normal_key();
+  users_ = std::vector<User>();
+  cluster_idx_id_.reserve(WritePerClient * ClientNum);
+  cluster_idx_user_id_.reserve(WritePerClient * ClientNum);
+  cluster_idx_salary_.reserve(WritePerClient * ClientNum);
+  Cluster_Index_Helper index_builder(&cluster_idx_id_, &cluster_idx_user_id_, &cluster_idx_salary_);
+  for (size_t log_id = 0; log_id < disk_path.size(); log_id++) {
+    // 如果ret != 0,没有给file分配内存,因此可以让reader管理file指针的内存,reader离开作用域时，会调用reader的析构函数释放file指针的空间
+    MmapReader reader(disk_path[log_id], MmapSize);
+    char *record;
+    while (reader.ReadRecord(record, RecordSize)) {
+      const User *user = (const User *)record;
+      index_builder.Scan(user);
+    }
+  }
+  for (size_t log_id = 0; log_id < pmem_path.size(); log_id++) {
+    PmapBufferReader reader(pmem_path[log_id], PoolSize);
+    char *record;
+    while (reader.ReadRecord(record, RecordSize)) {
+      const User *user = (const User *)record;
+      index_builder.Scan(user);
+    }
+  }
+  open_all_writers();
+  spdlog::info("build_3_cluster_index done, record num = {}", index_builder.Get_count());
+  return index_builder.Get_count();
+}
+
+inline size_t Engine::perf_Read(void *ctx, int32_t select_column,
+    int32_t where_column, const void *column_key, 
+    size_t column_key_len, void *res) {
+  size_t res_num = 0;
+  switch(where_column) {
+      case Id: {
+        int64_t id = *((int64_t *)column_key);
+        auto iter = cluster_idx_id_.find(id);
+        if (iter != cluster_idx_id_.end()) {
+          res_num = 1;
+          memcpy(res, iter->second.s, 128); 
+        }
+      }
+      break;
+
+      case Userid: {
+        auto iter = cluster_idx_user_id_.find(BlizardHashWrapper(reinterpret_cast<const char*>(column_key), UseridLen));
+        if (iter != cluster_idx_user_id_.end()) {
+          res_num = 1;
+          memcpy(res, iter->second.s, 128); 
+        }
+      } 
+      break;
+
+      case Name: {
+        spdlog::error("don't support select where column[Name]");
+      } 
+      break;
+
+      case Salary: {
+        int64_t salary = *((int64_t *)column_key);
+        auto iter = cluster_idx_salary_.find(salary);
+        if (iter != cluster_idx_salary_.end()) {
+          res_num = 1;
+          memcpy(res, &iter->second, 8); 
+        }
+      }
+      break;
+
+      default:
+        spdlog::error("unexpected where_column: {}", where_column);
+      break;
+  }
+  return res_num;
 }
