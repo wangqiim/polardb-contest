@@ -9,7 +9,7 @@ const int CommitField = 8;
 constexpr const int kBlockSize = 32768;
 const char WALFileNamePrefix[] = "WAL";
 const int PoolSize = 1 << 29; // 512MB can't exceed 1GB
-const int MmapSize = (1 << 28) + (1 << 23) + (1 << 22); // 281018368 data: 272000000
+const int MmapSize = 272800000; // 281018368 data: 272000000
 
 const char PmapBufferWriterFileNameSuffix[] = "BUF";
 const int PmapBufferWriterSize = 4352; // LCM(256, 272) write 256 per write pmem
