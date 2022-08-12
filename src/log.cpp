@@ -298,7 +298,6 @@ int PmapBufferWriter::Append(const void* data, const size_t len) {
   // flush buffer
   pmem_memcpy_nodrain(curr_, mmap_writer_->Data(), mmap_writer_->Bytes());
   curr_ += mmap_writer_->Bytes();
-  pmem_drain();
   mmap_writer_->Reset();
 
   // must success!! (ret == 0)
