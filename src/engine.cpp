@@ -170,12 +170,12 @@ int Engine::Append(const void *datas) {
   if (cur_phase == Phase::Hybrid) {
     mtx_.unlock();
   }
-  write_cnt++;
-  if (write_cnt == WritePerClient) {
-  auto end = std::chrono::system_clock::now();
-    std::chrono::duration<double> elapsed_seconds = end-start_;
-    spdlog::info("tid[{}] finish write {} records, elapsed time: {}s", tid_, WritePerClient, elapsed_seconds.count());
-  }
+  // write_cnt++;
+  // if (write_cnt == WritePerClient) {
+  // auto end = std::chrono::system_clock::now();
+  //   std::chrono::duration<double> elapsed_seconds = end-start_;
+  //   spdlog::info("tid[{}] finish write {} records, elapsed time: {}s", tid_, WritePerClient, elapsed_seconds.count());
+  // }
   return 0;
 }
 
