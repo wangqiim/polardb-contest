@@ -181,9 +181,16 @@ MmapWriter::MmapWriter(const std::string &filename, int mmap_size)
   data_start_ = start_ + 8;
   uint64_t record_num_per_round_buffer = (mmap_size_ - 8) / RecordSize;
   data_curr_ = data_start_ + (*commit_cnt_ % record_num_per_round_buffer) * RecordSize;
+
+  malloc_start_ = (char *)malloc(mmap_size);
+  malloc_cnt_ = 0;
 }
 
 MmapWriter::~MmapWriter() {
+  for (size_t i = 0; i < malloc_cnt_; i++) {
+    Append(malloc_start_ + (i * RecordSize), RecordSize);
+  }
+  free(malloc_start_);
   munmap(start_, mmap_size_);
   close(fd_);
 }
@@ -195,6 +202,12 @@ int MmapWriter::Append(const void* data, const size_t len) {
   memcpy(data_curr_, data, len);
   *commit_cnt_ = *commit_cnt_ + 1;
   data_curr_ += len;
+  return 0;
+}
+
+int MmapWriter::AppendMem(const void* data, const size_t len) {
+  memcpy(malloc_start_ + (len * malloc_cnt_), data, len);
+  malloc_cnt_++;
   return 0;
 }
 
@@ -256,6 +269,7 @@ bool MmapReader::ReadRecord(char *&record, int len) {
 PmapBufferWriter::PmapBufferWriter(const std::string &filename, size_t pool_size)
     : mmap_writer_(nullptr), pool_size_(pool_size), start_(nullptr), curr_(nullptr) {
 
+  spdlog::error("can't use mmapwrite before compatibility");
   buff_filename_ = filename + PmapBufferWriterFileNameSuffix;
   pmem_filename_ = filename;
   mmap_writer_ = new MmapWriter(buff_filename_, PmapBufferWriterFileSize);

@@ -24,4 +24,6 @@ const int AEPNum = 0;  // 在lockfree情况下，必须ClientNum = SSDNum + AEPN
 const int WaitChangeFinishSecond = 3;
 const int FenceSecond = 10;
 
+const int WriteOnlyMust = 100000;
+
 enum Phase{Hybrid=0, WriteOnly, ReadOnly};

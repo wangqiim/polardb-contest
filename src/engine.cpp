@@ -4,6 +4,8 @@
 #include <sys/stat.h>
 #include <sys/mman.h>
 #include <fstream>
+#include <chrono>
+#include <thread>
 
 #include "spdlog/spdlog.h"
 #include "engine.h"
@@ -12,6 +14,7 @@
 
 thread_local int tid_ = -1;
 thread_local int write_cnt = 0;
+thread_local int read_cnt = 0;
 const std::string phase_name[3] = {"Hybrid", "WriteOnly", "ReadOnly"};
 
 void add_res(const User &user, int32_t select_column, void **result) {
@@ -149,7 +152,11 @@ int Engine::Append(const void *datas) {
   const User *user = reinterpret_cast<const User *>(datas);
 
   if (tid_ < SSDNum) {
-    disk_logs_[tid_]->Append(datas, RecordSize);
+    if (write_cnt > WriteOnlyMust) {
+      disk_logs_[tid_]->AppendMem(datas, RecordSize);
+    } else {
+      disk_logs_[tid_]->Append(datas, RecordSize);
+    }
   } else {
     pmem_logs_[tid_ - SSDNum]->Append(datas, RecordSize);
   }
@@ -170,7 +177,7 @@ int Engine::Append(const void *datas) {
   if (cur_phase == Phase::Hybrid) {
     mtx_.unlock();
   }
-  // write_cnt++;
+  write_cnt++;
   // if (write_cnt == WritePerClient) {
   //   auto end = std::chrono::system_clock::now();
   //   std::chrono::duration<double> elapsed_seconds = end-start_;
@@ -395,7 +402,8 @@ int Engine::build_3_cluster_index(const std::vector<std::string> disk_path, cons
       index_builder.Scan(user);
     }
   }
-  open_all_writers();
+  // 在writers中，会通过malloc分配空间，因此不打开防止oom
+  // open_all_writers();
   spdlog::info("build_3_cluster_index done, record num = {}", index_builder.Get_count());
   return index_builder.Get_count();
 }
@@ -404,6 +412,11 @@ inline size_t Engine::perf_Read(void *ctx, int32_t select_column,
     int32_t where_column, const void *column_key, 
     size_t column_key_len, void *res) {
   size_t res_num = 0;
+  if (read_cnt == 0) {
+    using namespace std::chrono_literals;
+    std::this_thread::sleep_for(1100ms);
+  }
+  read_cnt++;
   switch(where_column) {
       case Id: {
         int64_t id = *((int64_t *)column_key);

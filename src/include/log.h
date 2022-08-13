@@ -77,6 +77,7 @@ class MmapWriter {
   MmapWriter& operator=(const MmapWriter&) = delete;
 
   int Append(const void* data, const size_t len);
+  int AppendMem(const void* data, const size_t len);
 
   int GetCommitCnt() { return *commit_cnt_; }
   int Bytes() { return data_curr_ - data_start_; }
@@ -98,6 +99,10 @@ class MmapWriter {
   uint64_t *commit_cnt_; // commit_cnt_ = (uint64_t *)mmap_start_ptr
   char *data_start_; // data_start_ = (char *)mmap_start_ptr + 8
   char *data_curr_;
+
+  // writeonly phrase
+  char *malloc_start_ = nullptr;
+  size_t malloc_cnt_ = 0;
 };
 
 class MmapReader {
