@@ -16,12 +16,15 @@ const int PmapBufferWriterSize = 4352; // LCM(256, 272) write 256 per write pmem
 const int PmapBufferWriterFileSize = PmapBufferWriterSize + 8; // 8 bytes is for commit_cnt
 
 // ------ engine.h -------
-const int WritePerClient = 1000000; 
+const int WritePerClient = 1000000;
+const int ReadPerClient = 1000000;
 const int ClientNum = 50;
 const int SSDNum = 23;  // 在lockfree情况下，必须ClientNum = SSDNum + AEPNum
 const int AEPNum = 27;  // 在lockfree情况下，必须ClientNum = SSDNum + AEPNum
 
 const int WaitChangeFinishSecond = 3;
 const int FenceSecond = 10;
+
+const int ParallelReadThreadNum = 8;
 
 enum Phase{Hybrid=0, WriteOnly, ReadOnly};

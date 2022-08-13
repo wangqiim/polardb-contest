@@ -72,6 +72,8 @@ class Engine {
     cluster_primary_key cluster_idx_id_;
     cluster_unique_key  cluster_idx_user_id_;
     cluster_normal_key  cluster_idx_salary_;
+    std::vector<std::mutex> read_mtxs_;
+    std::vector<std::condition_variable> read_cvs_;
     // debug log
     std::chrono::_V2::system_clock::time_point start_;
 };

@@ -4,6 +4,7 @@
 #include <sys/stat.h>
 #include <sys/mman.h>
 #include <fstream>
+#include <chrono>
 
 #include "spdlog/spdlog.h"
 #include "engine.h"
@@ -12,6 +13,7 @@
 
 thread_local int tid_ = -1;
 thread_local int write_cnt = 0;
+thread_local int read_cnt = 0;
 const std::string phase_name[3] = {"Hybrid", "WriteOnly", "ReadOnly"};
 
 void add_res(const User &user, int32_t select_column, void **result) {
@@ -84,7 +86,9 @@ void record_scan(const char *record, void *context) {
 Engine::Engine(const char* aep_dir, const char* disk_dir)
   : is_changing_(false), phase_(Phase::Hybrid), next_tid_(0)
   , mtx_(), aep_dir_(aep_dir), dir_(disk_dir), disk_logs_()
-  , pmem_logs_(), idx_id_(), idx_user_id_(), idx_salary_() {
+  , pmem_logs_(), idx_id_(), idx_user_id_(), idx_salary_()
+  , read_mtxs_(std::vector<std::mutex>(ParallelReadThreadNum))
+  , read_cvs_(std::vector<std::condition_variable>(ParallelReadThreadNum)) {
 }
 
 Engine::~Engine() {
@@ -403,6 +407,15 @@ int Engine::build_3_cluster_index(const std::vector<std::string> disk_path, cons
 inline size_t Engine::perf_Read(void *ctx, int32_t select_column,
     int32_t where_column, const void *column_key, 
     size_t column_key_len, void *res) {
+  if (read_cnt == 0) {
+    must_set_tid();
+    // 8个线程一组执行6轮. 8 * 6  = 48, 一共50个线程，前8个和最后2个线程直接开始执行
+    if (tid_ >= 8 && tid_ < 48) {
+      std::unique_lock<std::mutex> lk(read_mtxs_[tid_ % ParallelReadThreadNum]);
+      using namespace std::chrono_literals;
+      read_cvs_[tid_ % ParallelReadThreadNum].wait_for(lk, 4000ms);
+    }
+  }
   size_t res_num = 0;
   switch(where_column) {
       case Id: {
@@ -442,6 +455,16 @@ inline size_t Engine::perf_Read(void *ctx, int32_t select_column,
       default:
         spdlog::error("unexpected where_column: {}", where_column);
       break;
+  }
+  
+  read_cnt++;
+  if (read_cnt == ReadPerClient) {
+    auto end = std::chrono::system_clock::now();
+    std::chrono::duration<double> elapsed_seconds = end-start_;
+    spdlog::info("tid[{}] finish read {} records, elapsed time: {}s", tid_, ReadPerClient, elapsed_seconds.count());
+    if (tid_ < 48) {
+      read_cvs_[tid_ % ParallelReadThreadNum].notify_one();
+    }
   }
   return res_num;
 }
