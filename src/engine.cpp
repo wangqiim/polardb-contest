@@ -125,6 +125,9 @@ int Engine::Init() {
   spdlog::info("init replay build index done, record num = {}", record_num);
   phase_.store(record_num == 0? Phase::WriteOnly: Phase::ReadOnly);
 
+  warmUp();  
+  spdlog::info("warmup ssd & pmam done!");
+
   Util::print_resident_set_size();
   spdlog::info("engine init done, phase_:{}", phase_name[phase_.load()]);
   start_ = std::chrono::system_clock::now();
@@ -441,4 +444,32 @@ inline size_t Engine::perf_Read(void *ctx, int32_t select_column,
       break;
   }
   return res_num;
+}
+
+// 对于mmap，有两种最直接的warmup思路。假设pagecache大小能容纳6个slot
+// 方案1:
+// writer1: slot(w) slot(w) slot(nw) slot(nw)
+// writer2: slot(w) slot(w) slot(nw) slot(nw)
+// writer3: slot(w) slot(w) slot(nw) slot(nw)
+// 方案2:
+// writer2: slot(w) slot(w) slot(w) slot(w)
+// writer3: slot(w) slot(w) slot(nw) slot(nw)
+// writer3: slot(nw) slot(nw) slot(nw) slot(nw)
+// 在这里我采用方案1
+void Engine::warmUp() {
+  if (disk_logs_.size() > 0) {
+    // 注意：假设每个mmapwriter的大小是一样的
+    size_t max_slot = disk_logs_[0]->MaxSlot();
+    // 从后往前warmup，那么理论上来说先被置换出去的页应该就是尾页
+    // 这样当发生驱逐时，会先驱逐出mmap的地址空间后面一部分pagecache，应该会好一点
+    for (size_t i = max_slot; i != 0; i--) {
+      for (const auto &mmapWriter: disk_logs_) {
+        mmapWriter->WarmUp(i - 1);
+      }
+    }
+  }
+  for (const auto &pmemWriter: pmem_logs_) {
+    // pmemwriter的buffer很小，直接warmup整个buffer
+    pmemWriter->WarmUp();
+  }
 }

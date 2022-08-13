@@ -35,6 +35,7 @@ class Engine {
       size_t column_key_len, void *res);
     
   private:
+    void warmUp();
     int replay_index(const std::vector<std::string> disk_path, const std::vector<std::string> pmem_path);
     int must_set_tid();
 

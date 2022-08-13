@@ -1,3 +1,4 @@
+#include <xmmintrin.h>
 #include <string>
 #include <libpmemlog.h>
 #include "env.h"
@@ -82,6 +83,13 @@ class MmapWriter {
   char* Data() { return data_start_; }
   void Reset() { data_curr_ = data_start_; }
   
+  size_t MaxSlot() const { return (mmap_size_ - 8) / RecordSize; }
+  // 预取第slot个记录的头指针，每次顺便预取一下commit_cnt_指针
+  void WarmUp(const size_t slot) { 
+    _mm_prefetch((const void *)(data_start_ + (slot * RecordSize)), _MM_HINT_T0);
+    _mm_prefetch((const void *)commit_cnt_, _MM_HINT_T0);
+  }
+
  private:
   const std::string filename_;
   int mmap_size_;
@@ -123,6 +131,13 @@ class PmapBufferWriter {
   ~PmapBufferWriter();
 
   int Append(const void* data, const size_t len);
+
+  // 对于pmem要warm整个mmap_writer_(buffer)
+  void WarmUp() {
+    for (size_t i = 0; i < mmap_writer_->MaxSlot(); i++) {
+      mmap_writer_->WarmUp(i);
+    }
+  }
  private:
   std::string buff_filename_;
   std::string pmem_filename_;
