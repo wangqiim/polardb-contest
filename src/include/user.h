@@ -90,7 +90,16 @@ public:
   };
 
   LocationsWrapper(const LocationsWrapper&) = delete;
-  LocationsWrapper& operator=(const LocationsWrapper&) = delete;
+  LocationsWrapper& operator=(const LocationsWrapper& other) {
+    if (next_) {
+      delete next_;
+      next_ = nullptr;
+    }
+    loc_ = other.loc_;
+    size_ = other.size_;
+    next_ = other.next_;
+    return *this;
+  }
 
   void Push(size_t loc) {
     if (0 == size_) {
@@ -128,6 +137,11 @@ public:
 
   BlizardHashWrapper(BlizardHashWrapper &&other) {
     hash1_ = other.hash1_;
+  }
+
+  BlizardHashWrapper& operator=(const BlizardHashWrapper &other) {
+    hash1_ = other.hash1_;
+    return *this;
   }
 
   size_t Hash() const { return hash1_; }

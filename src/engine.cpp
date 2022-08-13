@@ -172,7 +172,7 @@ int Engine::Append(const void *datas) {
   }
   // write_cnt++;
   // if (write_cnt == WritePerClient) {
-  // auto end = std::chrono::system_clock::now();
+  //   auto end = std::chrono::system_clock::now();
   //   std::chrono::duration<double> elapsed_seconds = end-start_;
   //   spdlog::info("tid[{}] finish write {} records, elapsed time: {}s", tid_, WritePerClient, elapsed_seconds.count());
   // }

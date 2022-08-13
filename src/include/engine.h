@@ -4,7 +4,10 @@
 #include <mutex>
 #include <vector>
 
-#include "unordered_dense.h"
+#include "hash_table8.hpp"
+// #include "hash_table7.hpp"
+// #include "hash_table6.hpp"
+#include "hash_table5.hpp"
 #include "user.h"
 #include "log.h"
 
@@ -13,13 +16,13 @@
 // uk : user_id 		//唯一索引
 // sk : salary			//普通索引
 
-using primary_key = ankerl::unordered_dense::map<int64_t, size_t>;
-using unique_key  = ankerl::unordered_dense::map<BlizardHashWrapper, size_t>;
-using normal_key  = ankerl::unordered_dense::map<int64_t, LocationsWrapper>;
+using primary_key = emhash8::HashMap<int64_t, size_t>;
+using unique_key  = emhash8::HashMap<BlizardHashWrapper, size_t>;
+using normal_key  = emhash8::HashMap<int64_t, LocationsWrapper>;
 
-using cluster_primary_key = ankerl::unordered_dense::map<int64_t, UserIdWrapper>; // Id->Userid
-using cluster_unique_key  = ankerl::unordered_dense::map<BlizardHashWrapper, NameWrapper>; // Userid->Name
-using cluster_normal_key  = ankerl::unordered_dense::map<int64_t, int64_t>; // Salary->Id
+using cluster_primary_key = emhash8::HashMap<int64_t, UserIdWrapper>; // Id->Userid
+using cluster_unique_key  = emhash8::HashMap<BlizardHashWrapper, NameWrapper>; // Userid->Name
+using cluster_normal_key  = emhash5::HashMap<int64_t, int64_t>; // Salary->Id
 
 class Engine {
   public:
