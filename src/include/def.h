@@ -18,8 +18,8 @@ const int PmapBufferWriterFileSize = PmapBufferWriterSize + 8; // 8 bytes is for
 // ------ engine.h -------
 const int WritePerClient = 1000000; 
 const int ClientNum = 50;
-const int SSDNum = 23;  // 在lockfree情况下，必须ClientNum = SSDNum + AEPNum
-const int AEPNum = 27;  // 在lockfree情况下，必须ClientNum = SSDNum + AEPNum
+const int SSDNum = 50;  // 在lockfree情况下，必须ClientNum = SSDNum + AEPNum
+const int AEPNum = 0;  // 在lockfree情况下，必须ClientNum = SSDNum + AEPNum
 
 const int WaitChangeFinishSecond = 3;
 const int FenceSecond = 10;
