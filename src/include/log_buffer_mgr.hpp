@@ -23,7 +23,7 @@ const uint64_t LogBufferMgrHeaderSize = 4ULL + 4ULL; // LogbufferMgrHeader记录
 const uint64_t LogBufferMgrBody = LogBufferMgrSize - LogBufferMgrHeaderSize;
 
 const uint64_t LogBufferHeaderSize = 8ULL; // 当前buffer log已经commit了多少条记录
-const uint64_t LogBufferBodySize = 272ULL * 256ULL * 100ULL; // (272 * 256) LogBufferSize = LCM(272, 256), 是倍数即可，当每个buffer足够大时，不是倍数应该影响也不大
+const uint64_t LogBufferBodySize = 272ULL * 256ULL * 100ULL; // (272 * 256) LogBufferSize = LCM(272, 256), 必须是倍数(log buffer需要判断是否满)
 const uint64_t LogBufferSize = LogBufferHeaderSize + LogBufferBodySize;
 
 const uint64_t LogBufferFreeNumPerBufferMgr = LogBufferMgrBody / LogBufferSize; 
