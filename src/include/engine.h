@@ -10,6 +10,7 @@
 #include "hash_table5.hpp"
 #include "user.h"
 #include "log.h"
+#include "log_buffer_mgr.hpp"
 
 // id int64, user_id char(128), name char(128), salary int64
 // pk : id 			    //主键索引

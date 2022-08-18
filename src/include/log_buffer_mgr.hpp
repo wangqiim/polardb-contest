@@ -15,7 +15,7 @@
 #include "util.h"
 
 // 调参: 本地运行需要调小
-const uint64_t PmemSize = 16 * (1 << 30); // 16G 搓搓有余
+const uint64_t PmemSize = 16ULL * (1 << 30); // 16G 搓搓有余
 // ------ log_buffer_mgr.hpp -------
 const uint64_t LogBufferMgrSize = 6.4 * (1024ULL * 1024ULL * 1024ULL); // pagecache: 6.4G?? (32 * 0.2)
 const uint64_t LogBufferMgrHeaderSize = 4ULL + 4ULL; // LogbufferMgrHeader记录目前已经落盘(pmem)了多少条记录，以及正在落盘哪个bufferlog
@@ -78,7 +78,7 @@ char *GetOffset(uint64_t offset) { return start_ + offset; }
 
 private:
   void warmUpAll() { 
-    for (uint64_t offset = 0; offset < mmap_size_; offset += 64) {
+    for (int offset = 0; offset < mmap_size_; offset += 64) {
         _mm_prefetch((const void *)(start_ + offset), _MM_HINT_T0);
     }
   }
@@ -122,7 +122,7 @@ class PmemWrapper {
 	}
 
 	// 每次flush一大块到pmem中去
-	int Copy(char *dst, const char *src, uint64_t len = LogBufferBodySize) {
+	void Copy(char *dst, const char *src, uint64_t len = LogBufferBodySize) {
   		pmem_memcpy_nodrain(dst, src, len);
 	}
 
@@ -135,7 +135,48 @@ class PmemWrapper {
   char *start_;
 };
 
-class LogBuffer;
+// 为了恢复方便，mgr为每个buffer的heder不是置为0, 而是将8字节拆成2个4字节
+// [uint_32, uint_32]=[该buffer的第一次写将对应总日志的第几条, 该buffer已经被写了几条记录]
+class LogBuffer {
+public:
+    LogBuffer(char *buffer_start, uint64_t size) {
+        commit_cnt_ = reinterpret_cast<uint64_t *>(buffer_start);
+        start_ = buffer_start + LogBufferHeaderSize;
+        curr_ = start_ + (*commit_cnt_) * RecordSize;
+        size_ = size;
+    }
+
+    void Reset() {
+		*commit_cnt_ = 0;
+		curr_ = start_;
+	};
+
+    bool IsFull() { return uint64_t(curr_ - start_) == size_; };
+
+    uint64_t CommitCnt() { return *commit_cnt_; };
+    void SetCommitCnt(uint64_t comit_cnt) {  *commit_cnt_ = comit_cnt; };
+
+	char *DataStartPtr() { return start_; }
+
+    // 每次默认append长度为RecordSize(172)
+    // data: append的数据
+    // 返回值：0: 成功
+    int Append(const char *data) {
+        if (IsFull()) {
+            return -1;
+        }
+        memcpy(curr_, data, RecordSize);
+        curr_ += RecordSize;
+        *commit_cnt_ += 1;
+		return 0;
+    }
+
+private:
+	uint64_t *commit_cnt_; // 该页提交了多少条记录
+	char     *start_;
+	char     *curr_;
+	uint64_t size_;
+};
 
 class LogBufferMgrHeader {
 public:
@@ -161,7 +202,7 @@ public:
 	LogBufferMgr(const char *mmap_filename, const char *pmem_filename,
 							uint64_t log_buffer_size = LogBufferMgrSize, uint64_t pmem_size = PmemSize) {
 		mmap_wrapper_ = new MmapWrapper(mmap_filename, log_buffer_size);
-		pmem_wrapper_ = new PmemWrapper(mmap_filename, PmemSize);
+		pmem_wrapper_ = new PmemWrapper(pmem_filename, pmem_size);
 
 		header_ = reinterpret_cast<LogBufferMgrHeader *>(mmap_wrapper_->GetOffset(0));
 		char *start = mmap_wrapper_->GetOffset(LogBufferMgrHeaderSize);
@@ -202,7 +243,7 @@ public:
 
 	void StartFlushRun() {
         // todo(wq): mgr析构时需要join这个线程吗???
-        std::thread(LogBufferMgr::backGroudFlush, this);
+        std::thread(&LogBufferMgr::backGroudFlush, this);
     }
 
 	char* GetPmemStart() { return pmem_wrapper_->GetOffset(0); }
@@ -278,49 +319,6 @@ private:
 	std::mutex dirty_log_buffer_mtx_;
 	std::condition_variable dirty_log_buffer_cv_;
 	std::queue<LogBuffer *> dirty_log_buffer_; // 已经写满了，需要刷盘
-};
-
-// 为了恢复方便，mgr为每个buffer的heder不是置为0, 而是将8字节拆成2个4字节
-// [uint_32, uint_32]=[该buffer的第一次写将对应总日志的第几条, 该buffer已经被写了几条记录]
-class LogBuffer {
-public:
-    LogBuffer(char *buffer_start, uint64_t size) {
-        commit_cnt_ = reinterpret_cast<uint64_t *>(buffer_start);
-        start_ = buffer_start + LogBufferHeaderSize;
-        curr_ = start_ + (*commit_cnt_) * RecordSize;
-        size_ = size;
-    }
-
-    void Reset() {
-		*commit_cnt_ = 0;
-		curr_ = start_;
-	};
-
-    bool IsFull() { return (curr_ - start_) == size_; };
-
-    uint64_t CommitCnt() { return *commit_cnt_; };
-    void SetCommitCnt(uint64_t comit_cnt) {  *commit_cnt_ = comit_cnt; };
-
-	char *DataStartPtr() { return start_; }
-
-    // 每次默认append长度为RecordSize(172)
-    // data: append的数据
-    // 返回值：0: 成功
-    int Append(const char *data) {
-        if (IsFull()) {
-            return -1;
-        }
-        memcpy(curr_, data, RecordSize);
-        curr_ += RecordSize;
-        *commit_cnt_ += 1;
-		return 0;
-    }
-
-private:
-	uint64_t *commit_cnt_; // 该页提交了多少条记录
-	char     *start_;
-	char     *curr_;
-	uint64_t size_;
 };
 
 class LogWriter {
