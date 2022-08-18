@@ -8,6 +8,7 @@
 #include <xmmintrin.h>
 #include <sys/mman.h>
 #include <libpmem.h>
+#include <chrono>
 
 #include "spdlog/spdlog.h"
 
@@ -15,14 +16,14 @@
 #include "util.h"
 
 // 调参: 本地运行需要调小
-const uint64_t PmemSize = 16ULL * (1 << 30); // 16G 搓搓有余
+const uint64_t PmemSize = 16 * (1024ULL * 1024ULL * 1024ULL); // 16G 搓搓有余
 // ------ log_buffer_mgr.hpp -------
 const uint64_t LogBufferMgrSize = 6.4 * (1024ULL * 1024ULL * 1024ULL); // pagecache: 6.4G?? (32 * 0.2)
 const uint64_t LogBufferMgrHeaderSize = 4ULL + 4ULL; // LogbufferMgrHeader记录目前已经落盘(pmem)了多少条记录，以及正在落盘哪个bufferlog
 const uint64_t LogBufferMgrBody = LogBufferMgrSize - LogBufferMgrHeaderSize;
 
 const uint64_t LogBufferHeaderSize = 8ULL; // 当前buffer log已经commit了多少条记录
-const uint64_t LogBufferBodySize = 280ULL * 256ULL * 100ULL; // 7000KB  (280 * 256 = 70KB) LogBufferSize = LCM(280, 256), 是倍数即可，当每个buffer足够大时，不是倍数应该影响也不大
+const uint64_t LogBufferBodySize = 272ULL * 256ULL * 100ULL; // (272 * 256) LogBufferSize = LCM(272, 256), 是倍数即可，当每个buffer足够大时，不是倍数应该影响也不大
 const uint64_t LogBufferSize = LogBufferHeaderSize + LogBufferBodySize;
 
 const uint64_t LogBufferFreeNumPerBufferMgr = LogBufferMgrBody / LogBufferSize; 
@@ -30,7 +31,7 @@ const uint64_t LogBufferFreeNumPerBufferMgr = LogBufferMgrBody / LogBufferSize;
 // unused
 const uint64_t LogBufferMgrRemainSize = LogBufferMgrBody % LogBufferSize; // todo(wq): 尽量不要让mmap(LogBufferMgrSize)有剩余
 
-const uint32_t FlushingNone = 0xFFFFFFFFUL;
+const uint32_t FlushingNone = 0x00000000UL;
 
 class MmapWrapper {
 public:
@@ -139,11 +140,12 @@ class PmemWrapper {
 // [uint_32, uint_32]=[该buffer的第一次写将对应总日志的第几条, 该buffer已经被写了几条记录]
 class LogBuffer {
 public:
-    LogBuffer(char *buffer_start, uint64_t size) {
+    LogBuffer(char *buffer_start, uint64_t size, uint32_t no) {
         commit_cnt_ = reinterpret_cast<uint64_t *>(buffer_start);
         start_ = buffer_start + LogBufferHeaderSize;
         curr_ = start_ + (*commit_cnt_) * RecordSize;
-        size_ = size;
+        data_size_ = size - LogBufferHeaderSize;
+		no_ = no;
     }
 
     void Reset() {
@@ -151,13 +153,14 @@ public:
 		curr_ = start_;
 	};
 
-    bool IsFull() { return uint64_t(curr_ - start_) == size_; };
+    bool IsFull() { return uint64_t(curr_ - start_) == data_size_; };
 
     uint64_t CommitCnt() { return *commit_cnt_; };
     void SetCommitCnt(uint64_t comit_cnt) {  *commit_cnt_ = comit_cnt; };
 
 	char *DataStartPtr() { return start_; }
 
+	uint32_t No() { return no_; }
     // 每次默认append长度为RecordSize(172)
     // data: append的数据
     // 返回值：0: 成功
@@ -175,7 +178,8 @@ private:
 	uint64_t *commit_cnt_; // 该页提交了多少条记录
 	char     *start_;
 	char     *curr_;
-	uint64_t size_;
+	uint64_t data_size_;
+	uint32_t no_;
 };
 
 class LogBufferMgrHeader {
@@ -184,8 +188,8 @@ public:
 		: flushed_cnt_(flushed_cnt), flushing_no_(flushing_no) { }
 	void AtomicSet(uint32_t flushed_cnt, uint32_t flushing_no) {
 		uint64_t tmp;
-		*(uint32_t *)tmp = flushed_cnt;
-		*((uint32_t *)tmp + 1) = flushing_no;
+		*(uint32_t *)(&tmp) = flushed_cnt;
+		*((uint32_t *)(&tmp) + 1) = flushing_no;
 		*(uint64_t *)this = tmp; // 原子写入，防止崩溃
 	}
 	uint32_t flushed_cnt_; // 记录目前已经确定的flushing了多少条记录到pmem中
@@ -204,18 +208,26 @@ public:
 		mmap_wrapper_ = new MmapWrapper(mmap_filename, log_buffer_size);
 		pmem_wrapper_ = new PmemWrapper(pmem_filename, pmem_size);
 
+		flush_thread_ = nullptr;
+		is_stop_ = false;
+
 		header_ = reinterpret_cast<LogBufferMgrHeader *>(mmap_wrapper_->GetOffset(0));
 		char *start = mmap_wrapper_->GetOffset(LogBufferMgrHeaderSize);
 		char *end = mmap_wrapper_->GetOffset(log_buffer_size);
-		for (char *curr = start; curr + LogBufferSize <= end; curr += LogBufferSize) {
+		uint32_t no = 1;
+		for (char *curr = start; curr + LogBufferSize <= end; curr += LogBufferSize, no += 1) {
 			// 重启时全部置为可分配，被拿走消费的时候发现写满了再归还
-			LogBuffer *log_buffer = new LogBuffer(curr, LogBufferSize);
+			LogBuffer *log_buffer = new LogBuffer(curr, LogBufferSize, no);
 			own_log_buffers_.push_back(log_buffer);
 			free_log_buffer_.push(log_buffer);
 		}
 	}
 
 	~LogBufferMgr() {
+		is_stop_ = true;
+		flush_thread_->join();
+		delete(flush_thread_);
+
 		for (size_t i = 0; i < own_log_buffers_.size(); i++) {
 			delete own_log_buffers_[i];
 		}
@@ -243,7 +255,7 @@ public:
 
 	void StartFlushRun() {
         // todo(wq): mgr析构时需要join这个线程吗???
-        std::thread(&LogBufferMgr::backGroudFlush, this);
+        flush_thread_ = new std::thread(&LogBufferMgr::backGroudFlush, this);
     }
 
 	char* GetPmemStart() { return pmem_wrapper_->GetOffset(0); }
@@ -251,16 +263,20 @@ public:
 	LogBufferMgrHeader* Header() { return header_; }
 
 	LogBuffer* GetLogBufferByNo(uint32_t no) {
-		return (LogBuffer *)(mmap_wrapper_->GetOffset(LogBufferMgrHeaderSize + no * LogBufferSize));
+		return own_log_buffers_[no];
 	}
 private:
     // todo(wq): 无锁设计
-    // 阻塞调用, 获取一个脏页，准备刷盘，被background线程调用
+    // 该方法不能永久阻塞，以为后台刷线程需要定期醒来判断是否被停止
     LogBuffer* getDirtyLogBuffer() {
         std::unique_lock<std::mutex> guard(dirty_log_buffer_mtx_);
-        while (dirty_log_buffer_.empty()) {
-            dirty_log_buffer_cv_.wait(guard);
+        if (dirty_log_buffer_.empty()) {
+			using namespace std::chrono_literals;
+            dirty_log_buffer_cv_.wait_for(guard, 1000ms);
         }
+		if (dirty_log_buffer_.empty()) { // 超时醒来的
+			return nullptr;
+		}
         LogBuffer* log_buffer = dirty_log_buffer_.front();
         dirty_log_buffer_.pop();
         return log_buffer;
@@ -278,14 +294,19 @@ private:
     void backGroudFlush() {
         for (;;) {
             // 1. 阻塞调用，获取一个DirtyLogBuffer
-            LogBuffer *dirty_log_buffer = getDirtyLogBuffer();
+            LogBuffer *dirty_log_buffer = nullptr;
+			while ((dirty_log_buffer = getDirtyLogBuffer()) == nullptr) {
+				if (is_stop_) {
+					return;
+				}
+			}
             // 2. 刷盘
-			header_->AtomicSet(header_->flushed_cnt_, offset2No(dirty_log_buffer));
+			header_->AtomicSet(header_->flushed_cnt_, dirty_log_buffer->No());
             flush(dirty_log_buffer);
 			// 3. 先改logbuffer header再改logbufferMgr，这样可以保证: 如果在改完log buffer header之后崩溃，
 			// 恢复的时候，则重新刷一次该log buffer也无妨
             dirty_log_buffer->Reset();
-			header_->AtomicSet(header_->flushed_cnt_ + LogBufferFreeNumPerBufferMgr, FlushingNone);
+			header_->AtomicSet(header_->flushed_cnt_ + LogBufferBodySize/RecordSize, FlushingNone);
 			// 4. 将该buffer归还到free队列里
 			giveBackFreeBuffer(dirty_log_buffer);
         }
@@ -293,7 +314,7 @@ private:
 
 	// 根据mmap的起始偏移地址，推算出是第几个
 	uint32_t offset2No(LogBuffer* log_buffer) {
-		return ((char *)log_buffer - mmap_wrapper_->GetOffset(LogBufferMgrHeaderSize)) / LogBufferSize;
+		return (((char *)log_buffer - mmap_wrapper_->GetOffset(LogBufferMgrHeaderSize)) / LogBufferSize) + 1;
 	}
 
     void flush(LogBuffer *dirty_log_buffer) {
@@ -306,6 +327,9 @@ private:
 private:
 	MmapWrapper *mmap_wrapper_;
 	PmemWrapper *pmem_wrapper_;
+
+	std::thread *flush_thread_;
+	bool is_stop_;
 
 	std::vector<LogBuffer *> own_log_buffers_;
 
@@ -357,7 +381,7 @@ public:
 		, totol_read_cnt_(0) {
 		// 如果flushing_no对应的log page正在刷，则将其commit_cnt置满，重复刷一次也无妨，反正都在同一个位置
 		if (header_->flushing_no_ != FlushingNone) {
-			LogBuffer* flushing_log_buffer = log_buffer_mgr_->GetLogBufferByNo(header_->flushing_no_);
+			LogBuffer* flushing_log_buffer = log_buffer_mgr_->GetLogBufferByNo(header_->flushing_no_ - 1);
 			flushing_log_buffer->SetCommitCnt(LogBufferBodySize/RecordSize); // 置满
 		}
     }

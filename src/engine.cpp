@@ -116,6 +116,7 @@ int Engine::Init() {
   pmem_file_path_ = aep_dir_+ "/" + WALFileNameSuffix;
 
   log_buffer_mgr_ = new LogBufferMgr(ssd_file_path_.c_str(), pmem_file_path_.c_str());
+  log_buffer_mgr_->StartFlushRun();
   open_all_writers();
   
   int record_num = replay_index(ssd_file_path_, pmem_file_path_);
@@ -274,14 +275,12 @@ int Engine::replay_index(const std::string &disk_path, const std::string &pmem_p
   idx_salary_.reserve(WritePerClient * ClientNum);
   users_.reserve(WritePerClient * ClientNum);
   Index_Helper index_builder(&idx_id_, &idx_user_id_, &idx_salary_, &users_);
-  for (size_t log_id = 0; log_id < disk_path.size(); log_id++) {
-    // 如果ret != 0,没有给file分配内存,因此可以让reader管理file指针的内存,reader离开作用域时，会调用reader的析构函数释放file指针的空间
-    LogReader reader(log_buffer_mgr_);
-    char *record;
-    while (reader.ReadRecord(record, RecordSize)) {
-      const User *user = (const User *)record;
-      index_builder.Scan(user);
-    }
+  // 如果ret != 0,没有给file分配内存,因此可以让reader管理file指针的内存,reader离开作用域时，会调用reader的析构函数释放file指针的空间
+  LogReader reader(log_buffer_mgr_);
+  char *record;
+  while (reader.ReadRecord(record, RecordSize) == 0) {
+    const User *user = (const User *)record;
+    index_builder.Scan(user);
   }
   spdlog::info("replay index done, record num = {}", index_builder.Get_count());
   return index_builder.Get_count();
@@ -351,14 +350,12 @@ int Engine::build_3_cluster_index(const std::string &disk_path, const std::strin
   cluster_idx_user_id_.reserve(WritePerClient * ClientNum);
   cluster_idx_salary_.reserve(WritePerClient * ClientNum);
   Cluster_Index_Helper index_builder(&cluster_idx_id_, &cluster_idx_user_id_, &cluster_idx_salary_);
-  for (size_t log_id = 0; log_id < disk_path.size(); log_id++) {
-    // 如果ret != 0,没有给file分配内存,因此可以让reader管理file指针的内存,reader离开作用域时，会调用reader的析构函数释放file指针的空间
-    LogReader reader(log_buffer_mgr_);
-    char *record;
-    while (reader.ReadRecord(record, RecordSize)) {
-      const User *user = (const User *)record;
-      index_builder.Scan(user);
-    }
+  // 如果ret != 0,没有给file分配内存,因此可以让reader管理file指针的内存,reader离开作用域时，会调用reader的析构函数释放file指针的空间
+  LogReader reader(log_buffer_mgr_);
+  char *record;
+  while (reader.ReadRecord(record, RecordSize) == 0) {
+    const User *user = (const User *)record;
+    index_builder.Scan(user);
   }
   spdlog::info("build_3_cluster_index done, record num = {}", index_builder.Get_count());
   return index_builder.Get_count();
