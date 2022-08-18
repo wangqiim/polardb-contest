@@ -131,7 +131,7 @@ private:
 
 class BlizardHashWrapper {
 public:
-  BlizardHashWrapper(const char *str, size_t len)
+  BlizardHashWrapper(const char *str, __attribute__((unused))size_t len)
     : hash1_(*(const int64_t *)str) {
   }
 

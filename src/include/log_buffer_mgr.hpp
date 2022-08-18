@@ -365,14 +365,14 @@ public:
     int ReadRecord(char *&record, int len = RecordSize) {
 		// 1. 先读pmem
 		if (totol_read_cnt_ < header_->flushed_cnt_) {
-			memcpy(record, pmem_start_, len);
+			record = pmem_start_;
 			pmem_start_ += len;
 			totol_read_cnt_++;
 			return 0;
 		}
 		// 2. 再读所有log_buffer
 		if (log_buffer_read_cnt_ < curr_log_buffer_->CommitCnt()) {
-			memcpy(record, curr_log_buffer_->DataStartPtr() + log_buffer_read_cnt_ * len, len);
+			record = curr_log_buffer_->DataStartPtr() + log_buffer_read_cnt_ * len;
 			log_buffer_read_cnt_++;
 			totol_read_cnt_++;
 			return 0;
@@ -385,7 +385,7 @@ public:
 				return -1;
 			}
 		}
-		memcpy(record, curr_log_buffer_->DataStartPtr() + log_buffer_read_cnt_ * len, len);
+		record = curr_log_buffer_->DataStartPtr() + log_buffer_read_cnt_ * len;
 		log_buffer_read_cnt_++;
 		totol_read_cnt_++;
 		return 0;

@@ -15,13 +15,3 @@ target_include_directories(interface_concurrent_test PUBLIC
                           )
 
 add_test(NAME interface_concurrent_test COMMAND interface_concurrent_test)
-
-
-add_executable(log_test log_test.cpp)
-target_link_libraries(log_test gtest_main log)
-
-target_include_directories(log_test PUBLIC
-                          "${PROJECT_SOURCE_DIR}/inc"
-                          )
-
-add_test(NAME log_test COMMAND log_test)
