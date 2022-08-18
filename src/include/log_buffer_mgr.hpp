@@ -161,7 +161,7 @@ public:
     // 每次默认append长度为RecordSize(172)
     // data: append的数据
     // 返回值：0: 成功
-    int Append(const char *data) {
+    int Append(const void *data) {
         if (IsFull()) {
             return -1;
         }
@@ -327,8 +327,12 @@ public:
         : log_buffer_mgr_(log_buffer_mgr)
         , log_buffer_(log_buffer_mgr_->GetFreeLogBuffer()) {
     }
+
+	~LogWriter() {
+		log_buffer_mgr_->GiveBackDirtyBuffer(log_buffer_);
+	}
     
-    int Append(const char *data) {
+    int Append(const void *data) {
 		// 这里循环的原因: 可能不巧mgr连续分配的log_buffer都是写满的，比如所有log_buffer都被写满，然后被kill
         while (log_buffer_->Append(data) != 0) {
 			log_buffer_mgr_->GiveBackDirtyBuffer(log_buffer_);

@@ -83,20 +83,18 @@ void record_scan(const char *record, void *context) {
 // --------------------Engine-----------------------------
 Engine::Engine(const char* aep_dir, const char* disk_dir)
   : is_changing_(false), phase_(Phase::Hybrid), next_tid_(0)
-  , mtx_(), aep_dir_(aep_dir), dir_(disk_dir), disk_logs_()
-  , pmem_logs_(), idx_id_(), idx_user_id_(), idx_salary_() {
+  , mtx_(), log_buffer_mgr_(nullptr), aep_dir_(aep_dir), ssd_dir_(disk_dir), log_writers_()
+  , idx_id_(), idx_user_id_(), idx_salary_() {
 }
 
 Engine::~Engine() {
   auto end = std::chrono::system_clock::now();
   std::chrono::duration<double> elapsed_seconds = end-start_;
   spdlog::info("since init done, elapsed time: {}s", elapsed_seconds.count());
-  for (size_t i = 0; i < disk_logs_.size(); i++) {
-    delete disk_logs_[i];
+  for (size_t i = 0; i < log_writers_.size(); i++) {
+    delete log_writers_[i];
   }
-  for (size_t i = 0; i < pmem_logs_.size(); i++) {
-    delete pmem_logs_[i];
-  }
+  delete log_buffer_mgr_;
 }
 
 int Engine::Init() {
@@ -106,26 +104,28 @@ int Engine::Init() {
       spdlog::error("init create aep_dir_[{}] fail!", aep_dir_);
     }
   }
-  if (!Util::FileExists(dir_)) {
-    spdlog::info("dir_: {} path is not exist, start to create it", dir_);
-    if (0 != mkdir(dir_.c_str(), 0755)) {
-      spdlog::error("init create dir[{}] fail!", dir_);
+  if (!Util::FileExists(ssd_dir_)) {
+    spdlog::info("dir_: {} path is not exist, start to create it", ssd_dir_);
+    if (0 != mkdir(ssd_dir_.c_str(), 0755)) {
+      spdlog::error("init create dir[{}] fail!", ssd_dir_);
     }
   }
 
   // build index
-  Util::gen_sorted_paths(dir_, WALFileNamePrefix, disk_file_paths_, SSDNum);
-  Util::gen_sorted_paths(aep_dir_, WALFileNamePrefix, pmem_file_paths_, AEPNum);
+  ssd_file_path_ = ssd_dir_+ "/" + WALFileNameSuffix;
+  pmem_file_path_ = aep_dir_+ "/" + WALFileNameSuffix;
+
+  log_buffer_mgr_ = new LogBufferMgr(ssd_file_path_.c_str(), pmem_file_path_.c_str());
+  open_all_writers();
   
-  int record_num = replay_index(disk_file_paths_, pmem_file_paths_);
+  int record_num = replay_index(ssd_file_path_, pmem_file_path_);
   if (record_num == ClientNum * WritePerClient) {
     is_read_perf_ = true;
-    build_3_cluster_index(disk_file_paths_, pmem_file_paths_);
+    build_3_cluster_index(ssd_file_path_, pmem_file_path_);
   }
   spdlog::info("init replay build index done, record num = {}", record_num);
   phase_.store(record_num == 0? Phase::WriteOnly: Phase::ReadOnly);
 
-  warmUp();  
   spdlog::info("warmup ssd & pmam done!");
 
   Util::print_resident_set_size();
@@ -148,11 +148,7 @@ int Engine::Append(const void *datas) {
   }
   const User *user = reinterpret_cast<const User *>(datas);
 
-  if (tid_ < SSDNum) {
-    disk_logs_[tid_]->Append(datas, RecordSize);
-  } else {
-    pmem_logs_[tid_ - SSDNum]->Append(datas, RecordSize);
-  }
+  log_writers_[tid_]->Append(datas);
 
   if (cur_phase == Phase::Hybrid) {
     users_.push_back(*user);
@@ -195,7 +191,7 @@ size_t Engine::Read(void *ctx, int32_t select_column,
         // 使得建立索引的过程中没有正在进行中的R/W（只能说无锁，尽量多睡眠一段时间）
         sleep(FenceSecond);
         // 2. 开始建立索引
-        replay_index(disk_file_paths_, pmem_file_paths_);
+        replay_index(ssd_file_path_, pmem_file_path_);
         // 3. 先修改phase_
         phase_.store(Phase::Hybrid);
         // 4. 再修改is_changing_
@@ -267,9 +263,8 @@ size_t Engine::Read(void *ctx, int32_t select_column,
   return res_num;
 }
 
-int Engine::replay_index(const std::vector<std::string> disk_path, const std::vector<std::string> pmem_path) {
+int Engine::replay_index(const std::string &disk_path, const std::string &pmem_path) {
   // 我不确定对于同一个文件或pmem同时读写打开会不会有问题，因此在这里重新关闭之后再次打开了writers。
-  close_all_writers();
   idx_id_.clear();
   idx_user_id_.clear();
   idx_salary_.clear();
@@ -281,24 +276,25 @@ int Engine::replay_index(const std::vector<std::string> disk_path, const std::ve
   Index_Helper index_builder(&idx_id_, &idx_user_id_, &idx_salary_, &users_);
   for (size_t log_id = 0; log_id < disk_path.size(); log_id++) {
     // 如果ret != 0,没有给file分配内存,因此可以让reader管理file指针的内存,reader离开作用域时，会调用reader的析构函数释放file指针的空间
-    MmapReader reader(disk_path[log_id], MmapSize);
+    LogReader reader(log_buffer_mgr_);
     char *record;
     while (reader.ReadRecord(record, RecordSize)) {
       const User *user = (const User *)record;
       index_builder.Scan(user);
     }
   }
-  for (size_t log_id = 0; log_id < pmem_path.size(); log_id++) {
-    PmapBufferReader reader(pmem_path[log_id], PoolSize);
-    char *record;
-    while (reader.ReadRecord(record, RecordSize)) {
-      const User *user = (const User *)record;
-      index_builder.Scan(user);
-    }
-  }
-  open_all_writers();
   spdlog::info("replay index done, record num = {}", index_builder.Get_count());
   return index_builder.Get_count();
+}
+
+int Engine::open_all_writers() {
+  if (log_writers_.size() != 0) {
+    spdlog::error("log_writers_ is not empty, when open writers");
+  }
+  for (int i = 0; i < ClientNum; i++) {
+    log_writers_.push_back(new LogWriter(log_buffer_mgr_));
+  }
+  return 0;
 }
 
 inline int Engine::must_set_tid() {
@@ -311,27 +307,6 @@ inline int Engine::must_set_tid() {
   }
   return 0;
 } 
-
-void Engine::close_all_writers() {
-for (size_t i = 0; i < disk_logs_.size(); i++) {
-    delete disk_logs_[i];
-  }
-  for (size_t i = 0; i < pmem_logs_.size(); i++) {
-    delete pmem_logs_[i];
-  }
-  disk_logs_.clear();
-  pmem_logs_.clear();
-}
-
-int Engine::open_all_writers() {
-  for (const auto &fname: disk_file_paths_) {
-    disk_logs_.push_back(new MmapWriter(fname, MmapSize));
-  }
-  for (const auto &fname: pmem_file_paths_) {
-    pmem_logs_.push_back(new PmapBufferWriter(fname, PoolSize));
-  }
-  return 0;
-}
 
 // read formance
 // ------Index Builder-------------
@@ -366,9 +341,7 @@ void Cluster_Index_Helper::Scan(const User *user) {
   count_++;
 }
 
-int Engine::build_3_cluster_index(const std::vector<std::string> disk_path, const std::vector<std::string> pmem_path) {
-  // 我不确定对于同一个文件或pmem同时读写打开会不会有问题，因此在这里重新关闭之后再次打开了writers。
-  close_all_writers();
+int Engine::build_3_cluster_index(const std::string &disk_path, const std::string &pmem_path) {
   // clear() is not work here for release memory in c++
   idx_id_ = primary_key();
   idx_user_id_ = unique_key();
@@ -380,22 +353,13 @@ int Engine::build_3_cluster_index(const std::vector<std::string> disk_path, cons
   Cluster_Index_Helper index_builder(&cluster_idx_id_, &cluster_idx_user_id_, &cluster_idx_salary_);
   for (size_t log_id = 0; log_id < disk_path.size(); log_id++) {
     // 如果ret != 0,没有给file分配内存,因此可以让reader管理file指针的内存,reader离开作用域时，会调用reader的析构函数释放file指针的空间
-    MmapReader reader(disk_path[log_id], MmapSize);
+    LogReader reader(log_buffer_mgr_);
     char *record;
     while (reader.ReadRecord(record, RecordSize)) {
       const User *user = (const User *)record;
       index_builder.Scan(user);
     }
   }
-  for (size_t log_id = 0; log_id < pmem_path.size(); log_id++) {
-    PmapBufferReader reader(pmem_path[log_id], PoolSize);
-    char *record;
-    while (reader.ReadRecord(record, RecordSize)) {
-      const User *user = (const User *)record;
-      index_builder.Scan(user);
-    }
-  }
-  open_all_writers();
   spdlog::info("build_3_cluster_index done, record num = {}", index_builder.Get_count());
   return index_builder.Get_count();
 }
@@ -444,32 +408,4 @@ inline size_t Engine::perf_Read(void *ctx, int32_t select_column,
       break;
   }
   return res_num;
-}
-
-// 对于mmap，有两种最直接的warmup思路。假设pagecache大小能容纳6个slot
-// 方案1:
-// writer1: slot(w) slot(w) slot(nw) slot(nw)
-// writer2: slot(w) slot(w) slot(nw) slot(nw)
-// writer3: slot(w) slot(w) slot(nw) slot(nw)
-// 方案2:
-// writer2: slot(w) slot(w) slot(w) slot(w)
-// writer3: slot(w) slot(w) slot(nw) slot(nw)
-// writer3: slot(nw) slot(nw) slot(nw) slot(nw)
-// 在这里我采用方案1
-void Engine::warmUp() {
-  if (disk_logs_.size() > 0) {
-    // 注意：假设每个mmapwriter的大小是一样的
-    size_t max_slot = disk_logs_[0]->MaxSlot();
-    // 从后往前warmup，那么理论上来说先被置换出去的页应该就是尾页
-    // 这样当发生驱逐时，会先驱逐出mmap的地址空间后面一部分pagecache，应该会好一点
-    for (size_t i = max_slot; i != 0; i--) {
-      for (const auto &mmapWriter: disk_logs_) {
-        mmapWriter->WarmUp(i - 1);
-      }
-    }
-  }
-  for (const auto &pmemWriter: pmem_logs_) {
-    // pmemwriter的buffer很小，直接warmup整个buffer
-    pmemWriter->WarmUp();
-  }
 }
