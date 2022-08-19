@@ -1,6 +1,6 @@
 #pragma once
 
-constexpr const int RecordSize = 8 + 128 + 128 + 8;
+constexpr const uint64_t RecordSize = 8 + 128 + 128 + 8;
 
 // ------ log.h ----------
 const char WALFileNameSuffix[] = "WAL";

@@ -209,6 +209,7 @@ TEST(InterfaceConcurrentTest, HackReadConcurrent) {
   engine_init(nullptr, nullptr, 0, aep_dir, disk_dir);
   engine_deinit(ctx);
   engine_init(nullptr, nullptr, 0, aep_dir, disk_dir);
+  LaunchParallelTest(threadNum, HackReadOnlyHelper, ctx, writeNumPerThread);
   engine_deinit(ctx);
   EXPECT_EQ(0, rmtree(disk_dir));
   EXPECT_EQ(0, rmtree(aep_dir));
