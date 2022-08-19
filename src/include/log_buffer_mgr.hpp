@@ -36,7 +36,7 @@ const uint32_t FlushingNone = 0x00000000UL;
 class MmapWrapper {
 public:
     // 构造时保证创建文件并且alloc大小, 如果是第一次创建memset(0)，并且warmup整块mmap内存
-  MmapWrapper(const std::string &filename, int mmap_size)
+  MmapWrapper(const std::string &filename, uint64_t mmap_size)
 							: filename_(filename), mmap_size_(mmap_size), fd_(-1)
 							, start_(nullptr) {
 		Util::CreateIfNotExists(filename_);
@@ -86,7 +86,7 @@ private:
 
 private:
   const std::string filename_;
-  int mmap_size_;
+  uint64_t mmap_size_;
   int fd_;
   char *start_;
 };
