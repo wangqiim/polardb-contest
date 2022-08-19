@@ -26,6 +26,7 @@ const uint64_t LogBufferHeaderSize = 8ULL; // 当前buffer log已经commit了多
 const uint64_t LogBufferBodySize = 272ULL * 256ULL * 100ULL; // (272 * 256) LogBufferSize = LCM(272, 256), 必须是倍数(log buffer需要判断是否满)
 const uint64_t LogBufferSize = LogBufferHeaderSize + LogBufferBodySize;
 
+const uint64_t RocordNumPerBuffer = LogBufferBodySize / RecordSize;
 const uint64_t LogBufferFreeNumPerBufferMgr = LogBufferMgrBody / LogBufferSize; 
 
 // unused
@@ -156,7 +157,10 @@ public:
     bool IsFull() { return uint64_t(curr_ - start_) == data_size_; };
 
     uint64_t CommitCnt() { return *commit_cnt_; };
-    void SetCommitCnt(uint64_t comit_cnt) {  *commit_cnt_ = comit_cnt; };
+    void SetFull() {  
+		*commit_cnt_ = RocordNumPerBuffer; 
+		curr_ = start_ + data_size_;
+	};
 
 	char *DataStartPtr() { return start_; }
 
@@ -253,6 +257,14 @@ public:
 			dirty_log_buffer_cv_.notify_one(); // todo(wq): notify_one is ok?
 	}
 
+    // todo(wq): 设计成无锁
+    // 阻塞调用, 归还一个自由页，被background线程调用
+    void GiveBackFreeBuffer(LogBuffer* log_buffer) {
+        std::unique_lock<std::mutex> guard(free_log_buffer_mtx_);
+        free_log_buffer_.push(log_buffer);
+        free_log_buffer_cv_.notify_one(); // todo(wq): notify_one is ok?
+    }
+
 	void StartFlushRun() {
         // todo(wq): mgr析构时需要join这个线程吗???
         flush_thread_ = new std::thread(&LogBufferMgr::backGroudFlush, this);
@@ -282,13 +294,6 @@ private:
         return log_buffer;
     }
 
-    // todo(wq): 设计成无锁
-    // 阻塞调用, 归还一个自由页，被background线程调用
-    void giveBackFreeBuffer(LogBuffer* log_buffer) {
-        std::unique_lock<std::mutex> guard(free_log_buffer_mtx_);
-        free_log_buffer_.push(log_buffer);
-        free_log_buffer_cv_.notify_one(); // todo(wq): notify_one is ok?
-    }
 
     // 开启后台线程刷dirty_buffer
     void backGroudFlush() {
@@ -306,9 +311,9 @@ private:
 			// 3. 先改logbuffer header再改logbufferMgr，这样可以保证: 如果在改完log buffer header之后崩溃，
 			// 恢复的时候，则重新刷一次该log buffer也无妨
             dirty_log_buffer->Reset();
-			header_->AtomicSet(header_->flushed_cnt_ + LogBufferBodySize/RecordSize, FlushingNone);
+			header_->AtomicSet(header_->flushed_cnt_ + RocordNumPerBuffer, FlushingNone);
 			// 4. 将该buffer归还到free队列里
-			giveBackFreeBuffer(dirty_log_buffer);
+			GiveBackFreeBuffer(dirty_log_buffer);
         }
     }
 
@@ -353,7 +358,7 @@ public:
     }
 
 	~LogWriter() {
-		log_buffer_mgr_->GiveBackDirtyBuffer(log_buffer_);
+		log_buffer_mgr_->GiveBackFreeBuffer(log_buffer_);
 	}
     
     int Append(const void *data) {
@@ -382,7 +387,7 @@ public:
 		// 如果flushing_no对应的log page正在刷，则将其commit_cnt置满，重复刷一次也无妨，反正都在同一个位置
 		if (header_->flushing_no_ != FlushingNone) {
 			LogBuffer* flushing_log_buffer = log_buffer_mgr_->GetLogBufferByNo(header_->flushing_no_ - 1);
-			flushing_log_buffer->SetCommitCnt(LogBufferBodySize/RecordSize); // 置满
+			flushing_log_buffer->SetFull(); // 置满
 		}
     }
     
