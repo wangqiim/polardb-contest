@@ -46,7 +46,7 @@ public:
 				spdlog::error("[MmapWrapper] can't open file {}", filename_);
 				exit(1);
 		}
-		int off = (int)lseek(fd_, 0, SEEK_END);
+		uint64_t off = (uint64_t)lseek(fd_, 0, SEEK_END);
 		if (off < 0) {
 				spdlog::error("[MmapWrapper] lseek end failed");
 				exit(1);
