@@ -18,7 +18,7 @@
 // 调参: 本地运行需要调小
 const uint64_t PmemSize = 16 * (1024ULL * 1024ULL * 1024ULL); // 16G 搓搓有余
 // ------ log_buffer_mgr.hpp -------
-const uint64_t LogBufferMgrSize = 6.4 * (1024ULL * 1024ULL * 1024ULL); // pagecache: 6.4G?? (32 * 0.2)
+const uint64_t LogBufferMgrSize = 6 * (1024ULL * 1024ULL * 1024ULL); // pagecache: 6.4G?? (32 * 0.2)
 const uint64_t LogBufferMgrHeaderSize = 4ULL + 4ULL; // LogbufferMgrHeader记录目前已经落盘(pmem)了多少条记录，以及正在落盘哪个bufferlog
 const uint64_t LogBufferMgrBody = LogBufferMgrSize - LogBufferMgrHeaderSize;
 
