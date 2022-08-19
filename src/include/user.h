@@ -25,6 +25,18 @@ public:
             (long long)id, StrHash(user_id, 128), StrHash(name, 128), (long long)salary);
         return std::string(buf);
     }
+
+    void printX() const {
+      printf("%04hX-", id);
+      for (int i = 0; i < 128; i+= 8) {
+        printf("%04hX", *(uint64_t *)(user_id + i));
+      }
+      printf("-", id);
+      for (int i = 0; i < 128; i+= 8) {
+        printf("%04hX", *(uint64_t *)(name + i));
+      }
+      printf("-%04hX ", salary);
+    }
 };
 
 enum Column{Id=0,Userid,Name,Salary};

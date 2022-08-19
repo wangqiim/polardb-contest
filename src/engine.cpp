@@ -171,7 +171,7 @@ int Engine::Append(const void *datas) {
   if (write_cnt == WritePerClient) {
     auto end = std::chrono::system_clock::now();
     std::chrono::duration<double> elapsed_seconds = end-start_;
-    spdlog::info("tid[{}] finish write {} records, elapsed time: {}s", tid_, WritePerClient, elapsed_seconds.count());
+    // spdlog::info("tid[{}] finish write {} records, elapsed time: {}s", tid_, WritePerClient, elapsed_seconds.count());
   }
   return 0;
 }
@@ -300,7 +300,7 @@ inline int Engine::must_set_tid() {
   if (tid_ == -1) {
     tid_ = next_tid_.fetch_add(1);
     if (tid_ >= ClientNum) {
-      spdlog::warn("w/r thread excceed 50!!");
+      // spdlog::warn("w/r thread excceed 50!!");
       tid_ %= ClientNum;
     }
   }
@@ -331,6 +331,7 @@ class Cluster_Index_Helper {
 };
 
 void Cluster_Index_Helper::Scan(const User *user) {
+  user->printX();
   // build pk index
   cluster_idx_id_->emplace(user->id, user->user_id);
   // build uk index
@@ -338,6 +339,11 @@ void Cluster_Index_Helper::Scan(const User *user) {
   // build nk index
   cluster_idx_salary_->emplace(user->salary, user->id);
   count_++;
+  if (count_ % 100 == 0) {
+    puts("");
+  } else if (count_ == 300000) {
+    exit(0);
+  }
 }
 
 int Engine::build_3_cluster_index(const std::string &disk_path, const std::string &pmem_path) {
