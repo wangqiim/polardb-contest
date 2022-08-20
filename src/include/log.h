@@ -67,13 +67,14 @@ class MmapBufferWriter {
   MmapBufferWriter(const MmapBufferWriter&) = delete;
   MmapBufferWriter& operator=(const MmapBufferWriter&) = delete;
 
-  int Append(const void* data, const size_t len) {
-    if (data_curr_ + len > start_ + mmap_size_) {
+  int Append(const void* data) {
+    if (data_curr_ + RecordSize > start_ + mmap_size_) {
       return -1;
     }
-    memcpy(data_curr_, data, len);
+    memcpy(data_curr_, data, 256);
+    memcpy(data_curr_ + 256, (const char *)data + 256, 16);
     *commit_cnt_ = *commit_cnt_ + 1;
-    data_curr_ += len;
+    data_curr_ += RecordSize;
     return 0;
   }
 
@@ -128,8 +129,8 @@ class PmapBufferWriter {
   PmapBufferWriter(const std::string &filename, size_t pool_size);
   ~PmapBufferWriter();
 
-  int Append(const void* data, const size_t len) {
-    if (mmap_writer_->Append(data, len) == 0) {
+  int Append(const void* data) {
+    if (mmap_writer_->Append(data) == 0) {
       return 0;
     }
     // flush buffer
@@ -138,7 +139,7 @@ class PmapBufferWriter {
     mmap_writer_->Reset();
 
     // must success!! (ret == 0)
-    mmap_writer_->Append(data, len);
+    mmap_writer_->Append(data);
     return 0;
   }
 
