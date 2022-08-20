@@ -6,6 +6,7 @@ const int OSPageSize = 4096;
 constexpr const int RecordSize = 8 + 128 + 128 + 8;
 
 // ------ log.h ----------
+const unsigned long CommitFlag = 0xFFFFFFFFFFFFFFFF;
 const int CommitField = 8;
 const char WALFileNamePrefix[] = "WAL";
 const int PoolSize = 1 << 29; // 512MB can't exceed 1GB

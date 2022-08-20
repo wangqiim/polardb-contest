@@ -14,13 +14,15 @@ class MmapWriter {
   MmapWriter& operator=(const MmapWriter&) = delete;
 
   int Append(const void* data) {
-    if (MmapSize > (*commit_cnt_) * OSPageSize) {
-      _mm_prefetch(start_ + (*commit_cnt_) * OSPageSize, _MM_HINT_NTA);
+    if (MmapSize > cnt_ * OSPageSize) {
+      _mm_prefetch(data_start_ + cnt_ * OSPageSize, _MM_HINT_NTA);
     }
     memcpy(data_curr_, data, 256);
     memcpy(data_curr_ + 256, (const char *)data + 256, 16);
-    *commit_cnt_ = *commit_cnt_ + 1;
+    memcpy(data_curr_ + 272, (const char *)data + 272, 8);
+    *(uint64_t *)(data_curr_ + 272) = CommitFlag;
     data_curr_ += RecordSize;
+    cnt_++;
     return 0;
   }
   
@@ -28,15 +30,13 @@ class MmapWriter {
   // 预取第slot个记录的头指针，每次顺便预取一下commit_cnt_指针
   void WarmUp(const size_t slot) { 
     _mm_prefetch((const void *)(data_start_ + (slot * RecordSize)), _MM_HINT_T0);
-    _mm_prefetch((const void *)commit_cnt_, _MM_HINT_T0);
   }
 
  private:
   const std::string filename_;
   int mmap_size_;
   int fd_;
-  char *start_;
-  uint64_t *commit_cnt_; // commit_cnt_ = (uint64_t *)mmap_start_ptr
+  int cnt_;
   char *data_start_; // data_start_ = (char *)mmap_start_ptr + 8
   char *data_curr_;
 };
@@ -48,15 +48,11 @@ class MmapReader {
 
   bool ReadRecord(char *&record, int len);
 
-  uint64_t CommitCnt() { return *commit_cnt_; }
-  char* Data() { return data_start_; }
-  
  private:
   const std::string filename_;
   int mmap_size_;
   int fd_;
-  char *start_;
-  uint64_t *commit_cnt_; // commit_cnt_ = (uint64_t *)mmap_start_ptr
+  int cnt_;
   char *data_start_; // data_start_ = (char *)mmap_start_ptr + 8
   char *data_curr_;
 };
