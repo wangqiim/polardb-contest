@@ -14,6 +14,9 @@ class MmapWriter {
   MmapWriter& operator=(const MmapWriter&) = delete;
 
   int Append(const void* data) {
+    if (MmapSize > (*commit_cnt_) * OSPageSize) {
+      _mm_prefetch(start_ + (*commit_cnt_) * OSPageSize, _MM_HINT_NTA);
+    }
     memcpy(data_curr_, data, 256);
     memcpy(data_curr_ + 256, (const char *)data + 256, 16);
     *commit_cnt_ = *commit_cnt_ + 1;

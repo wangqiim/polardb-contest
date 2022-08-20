@@ -1,5 +1,7 @@
 #pragma once
 
+const int OSPageSize = 4096;
+
 // ------ env.h ----------
 constexpr const int RecordSize = 8 + 128 + 128 + 8;
 
