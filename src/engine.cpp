@@ -135,7 +135,7 @@ int Engine::Init() {
 }
 
 int Engine::Append(const void *datas) {
-  if (phase_.load() == Phase::ReadOnly) {
+  if (unlikely(phase_.load() == Phase::ReadOnly)) {
     bool current = is_changing_.exchange(true);
     if (current == false) {
       // current可能和一个刚刚建完索引的线程冲突，因此做一次double check
@@ -151,7 +151,7 @@ int Engine::Append(const void *datas) {
       }
     }
   }
-  while (is_changing_.load() == true) {
+  while (unlikely(is_changing_.load() == true)) {
     sleep(WaitChangeFinishSecond);
   }
   must_set_tid();
@@ -195,7 +195,7 @@ int Engine::Append(const void *datas) {
 size_t Engine::Read(void *ctx, int32_t select_column,
     int32_t where_column, const void *column_key, 
     size_t column_key_len, void *res) {
-  if (is_read_perf_) {
+  if (likely(is_read_perf_)) {
     return perf_Read(ctx, select_column, where_column, column_key, column_key_len, res);
   }
   if (phase_.load() == Phase::WriteOnly) {
@@ -315,11 +315,14 @@ int Engine::replay_index(const std::vector<std::string> disk_path, const std::ve
 }
 
 inline int Engine::must_set_tid() {
-  if (tid_ == -1) {
+  if (unlikely(tid_ == -1)) {
     tid_ = next_tid_.fetch_add(1);
     if (tid_ >= ClientNum) {
       spdlog::warn("w/r thread excceed 50!!");
       tid_ %= ClientNum;
+    }
+    if (IsSSDThread(tid_)) {
+      sleep(4);
     }
   }
   return 0;
