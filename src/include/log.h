@@ -47,7 +47,7 @@ class MmapReader {
   const std::string filename_;
   int mmap_size_;
   int fd_;
-  int cnt_;
+  uint64_t cnt_;
   char *data_start_; // data_start_ = (char *)mmap_start_ptr + 8
   char *data_curr_;
 };
