@@ -8,7 +8,7 @@
 
 //--------------------- mmap file-----------------------------------
 MmapWriter::MmapWriter(const std::string &filename, int mmap_size)
-    : filename_(filename), mmap_size_(mmap_size), fd_(-1), cnt_(0)
+    : filename_(filename), mmap_size_(mmap_size), fd_(-1)
     , data_start_(nullptr), data_curr_(nullptr) {
   // 1. open fd; (must have been create)
   fd_ = open(filename_.c_str(), O_RDWR, 0644);
@@ -40,7 +40,6 @@ MmapWriter::MmapWriter(const std::string &filename, int mmap_size)
   data_start_ = reinterpret_cast<char *>(ptr);
   data_curr_ = data_start_;
   while (*(uint64_t *)(data_curr_ + RecordSize) != 0) {
-    cnt_++;
     data_curr_ += RecordSize;
   }
 }

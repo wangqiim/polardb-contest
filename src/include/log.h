@@ -14,15 +14,11 @@ class MmapWriter {
   MmapWriter& operator=(const MmapWriter&) = delete;
 
   int Append(const void* data) {
-    if (MmapSize > cnt_ * OSPageSize) {
-      _mm_prefetch(data_start_ + cnt_ * OSPageSize, _MM_HINT_NTA);
-    }
     memcpy(data_curr_, data, 256);
     memcpy(data_curr_ + 256, (const char *)data + 256, 16);
     memcpy(data_curr_ + 272, (const char *)data + 272, 8);
     *(uint64_t *)(data_curr_ + 272) = CommitFlag;
     data_curr_ += RecordSize;
-    cnt_++;
     return 0;
   }
   
@@ -36,7 +32,6 @@ class MmapWriter {
   const std::string filename_;
   int mmap_size_;
   int fd_;
-  int cnt_;
   char *data_start_; // data_start_ = (char *)mmap_start_ptr + 8
   char *data_curr_;
 };
