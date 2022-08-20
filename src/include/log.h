@@ -134,7 +134,7 @@ class PmapBufferWriter {
       return 0;
     }
     // flush buffer
-    pmem_memcpy_nodrain(curr_, mmap_writer_->Data(), mmap_writer_->Bytes());
+    pmem_memcpy(curr_, mmap_writer_->Data(), mmap_writer_->Bytes(), PMEM_F_MEM_NODRAIN|PMEM_F_MEM_NONTEMPORAL|PMEM_F_MEM_WC);
     curr_ += mmap_writer_->Bytes();
     mmap_writer_->Reset();
 
