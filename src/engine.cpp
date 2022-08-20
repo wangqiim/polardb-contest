@@ -162,7 +162,7 @@ int Engine::Append(const void *datas) {
   const User *user = reinterpret_cast<const User *>(datas);
 
   if (tid_ < SSDNum) {
-    disk_logs_[tid_]->Append(datas, RecordSize);
+    disk_logs_[tid_]->Append(datas);
   } else {
     pmem_logs_[tid_ - SSDNum]->Append(datas, RecordSize);
   }

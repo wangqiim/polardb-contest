@@ -1,9 +1,9 @@
 #include <functional>
 #include <sys/mman.h>
+#include <unistd.h>
+
 #include "spdlog/spdlog.h"
 #include "log.h"
-#include <unistd.h>
-#include <libpmem.h>
 #include "util.h"
 
 //--------------------- mmap file-----------------------------------
@@ -46,16 +46,6 @@ MmapWriter::MmapWriter(const std::string &filename, int mmap_size)
 MmapWriter::~MmapWriter() {
   munmap(start_, mmap_size_);
   close(fd_);
-}
-
-int MmapWriter::Append(const void* data, const size_t len) {
-  if (data_curr_ + len > start_ + mmap_size_) {
-    return -1;
-  }
-  memcpy(data_curr_, data, len);
-  *commit_cnt_ = *commit_cnt_ + 1;
-  data_curr_ += len;
-  return 0;
 }
 
 MmapReader::MmapReader(const std::string &filename, int mmap_size)
@@ -113,12 +103,108 @@ bool MmapReader::ReadRecord(char *&record, int len) {
 }
 
 //--------------------- pmem file-----------------------------------
+MmapBufferWriter::MmapBufferWriter(const std::string &filename, int mmap_size)
+    : filename_(filename), mmap_size_(mmap_size), fd_(-1), start_(nullptr)
+    , commit_cnt_(nullptr), data_start_(nullptr), data_curr_(nullptr) {
+  // 1. open fd; (must have been create)
+  fd_ = open(filename_.c_str(), O_RDWR, 0644);
+  if (fd_ < 0) {
+    spdlog::error("[MmapBufferWriter] can't open file {}", filename_);
+    exit(1);
+  }
+  int off = (int)lseek(fd_, 0, SEEK_END);
+  if (off < 0) {
+    spdlog::error("[MmapBufferWriter] lseek end failed");
+    exit(1);
+  }
+  if (off == 0) {
+    if (posix_fallocate(fd_, 0, mmap_size_) != 0) {
+      spdlog::error("[MmapBufferWriter] posix_fallocate failed");
+      exit(1);
+    }
+  }
+  // 2. mmap
+  void* ptr = mmap(NULL, mmap_size_, PROT_READ | PROT_WRITE, MAP_SHARED, fd_, 0);
+  if (ptr == MAP_FAILED) {
+    spdlog::error("[MmapBufferWriter] mmap failed, errno is {}", strerror(errno));
+    exit(1);
+  }
+  if (off == 0) {
+    memset(ptr, 0, mmap_size_);
+  }
+  start_ = reinterpret_cast<char *>(ptr);
+  commit_cnt_ = reinterpret_cast<uint64_t *>(start_);
+  data_start_ = start_ + 8;
+  uint64_t record_num_per_round_buffer = (mmap_size_ - 8) / RecordSize;
+  data_curr_ = data_start_ + (*commit_cnt_ % record_num_per_round_buffer) * RecordSize;
+}
+
+MmapBufferWriter::~MmapBufferWriter() {
+  munmap(start_, mmap_size_);
+  close(fd_);
+}
+
+MmapBufferReader::MmapBufferReader(const std::string &filename, int mmap_size)
+    : filename_(filename), mmap_size_(mmap_size), fd_(-1), start_(nullptr)
+    , commit_cnt_(nullptr), data_start_(nullptr), data_curr_(nullptr) {
+  Util::CreateIfNotExists(filename_);
+  // 1. open fd;
+  fd_ = open(filename_.c_str(), O_RDWR, 0644);
+  if (fd_ < 0) {
+    spdlog::error("[MmapBufferReader] can't open file {}", filename_);
+    exit(1);
+  }
+  int off = (int)lseek(fd_, 0, SEEK_END);
+  if (off < 0) {
+    spdlog::error("[MmapBufferReader] lseek end failed");
+    exit(1);
+  }
+  if (off == 0) {
+    if (posix_fallocate(fd_, 0, mmap_size_) != 0) {
+      spdlog::error("[MmapBufferReader] posix_fallocate failed");
+      exit(1);
+    }
+  }
+  // 2. mmap
+  void* ptr = mmap(NULL, mmap_size_, PROT_READ | PROT_WRITE, MAP_SHARED, fd_, 0);
+  if (ptr == MAP_FAILED) {
+    spdlog::error("[MmapBufferReader] mmap failed, errno is {}", strerror(errno));
+    exit(1);
+  }
+  if (off == 0) {
+    memset(ptr, 0, mmap_size_);
+  }
+  start_ = reinterpret_cast<char *>(ptr);
+  commit_cnt_ = reinterpret_cast<uint64_t *>(start_);
+  data_start_ = start_ + 8;
+  data_curr_ = data_start_;
+}
+
+MmapBufferReader::~MmapBufferReader() {
+  munmap(start_, mmap_size_);
+  close(fd_);
+}
+
+bool MmapBufferReader::ReadRecord(char *&record, int len) {
+  if (data_curr_ + len > start_ + mmap_size_) {
+    spdlog::error("[ReadRecord] read overflow mmap_size error");
+    exit(1);
+  }
+  if (static_cast<uint64_t>(data_curr_ - data_start_) / RecordSize < *commit_cnt_) {
+    record = data_curr_;
+    data_curr_ += len;
+    return true;
+  }
+  return false;
+}
+
+
 PmapBufferWriter::PmapBufferWriter(const std::string &filename, size_t pool_size)
     : mmap_writer_(nullptr), pool_size_(pool_size), start_(nullptr), curr_(nullptr) {
 
   buff_filename_ = filename + PmapBufferWriterFileNameSuffix;
   pmem_filename_ = filename;
-  mmap_writer_ = new MmapWriter(buff_filename_, PmapBufferWriterFileSize);
+  mmap_writer_ = new MmapBufferWriter(buff_filename_, PmapBufferWriterFileSize);
 
   bool create_file = !Util::FileExists(pmem_filename_);
   // 2. pmap
@@ -152,27 +238,13 @@ PmapBufferWriter::~PmapBufferWriter() {
   pmem_unmap(start_, pool_size_);
 }
 
-int PmapBufferWriter::Append(const void* data, const size_t len) {
-  if (mmap_writer_->Append(data, len) == 0) {
-    return 0;
-  }
-  // flush buffer
-  pmem_memcpy_nodrain(curr_, mmap_writer_->Data(), mmap_writer_->Bytes());
-  curr_ += mmap_writer_->Bytes();
-  mmap_writer_->Reset();
-
-  // must success!! (ret == 0)
-  mmap_writer_->Append(data, len);
-  return 0;
-}
-
 PmapBufferReader::PmapBufferReader(const std::string &filename, size_t pool_size)
     : mmap_reader_(nullptr), pool_size_(pool_size)
     , start_(nullptr), curr_(nullptr), must_have_flush_cnt_(0) {
 
   buff_filename_ = filename + PmapBufferWriterFileNameSuffix;
   pmem_filename_ = filename;
-  mmap_reader_ = new MmapReader(buff_filename_, PmapBufferWriterFileSize);
+  mmap_reader_ = new MmapBufferReader(buff_filename_, PmapBufferWriterFileSize);
 
   bool create_file = !Util::FileExists(pmem_filename_);
   // 2. mmap
