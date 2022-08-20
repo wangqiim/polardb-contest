@@ -35,6 +35,7 @@ MmapWriter::MmapWriter(const std::string &filename, int mmap_size)
   }
   if (off == 0) {
     memset(ptr, 0, mmap_size_);
+    msync(ptr, mmap_size_, MS_SYNC);
   }
   data_start_ = reinterpret_cast<char *>(ptr);
   data_curr_ = data_start_;
@@ -78,6 +79,7 @@ MmapReader::MmapReader(const std::string &filename, int mmap_size)
   }
   if (off == 0) {
     memset(ptr, 0, mmap_size_);
+    msync(ptr, mmap_size_, MS_SYNC);
   }
   data_start_ = reinterpret_cast<char *>(ptr);
   data_curr_ = data_start_;
@@ -135,6 +137,7 @@ MmapBufferWriter::MmapBufferWriter(const std::string &filename, int mmap_size)
   }
   if (off == 0) {
     memset(ptr, 0, mmap_size_);
+    msync(ptr, mmap_size_, MS_SYNC);
   }
   start_ = reinterpret_cast<char *>(ptr);
   commit_cnt_ = reinterpret_cast<uint64_t *>(start_);
@@ -177,6 +180,7 @@ MmapBufferReader::MmapBufferReader(const std::string &filename, int mmap_size)
   }
   if (off == 0) {
     memset(ptr, 0, mmap_size_);
+    msync(ptr, mmap_size_, MS_SYNC);
   }
   start_ = reinterpret_cast<char *>(ptr);
   commit_cnt_ = reinterpret_cast<uint64_t *>(start_);
