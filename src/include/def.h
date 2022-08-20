@@ -18,8 +18,8 @@ const int PmapBufferWriterFileSize = PmapBufferWriterSize + 8; // 8 bytes is for
 // ------ engine.h -------
 const int WritePerClient = 1000000; 
 const int ClientNum = 50;
-const int SSDNum = 23;  // 在lockfree情况下，必须ClientNum = SSDNum + AEPNum
-const int AEPNum = 27;  // 在lockfree情况下，必须ClientNum = SSDNum + AEPNum
+const int SSDNum = 24;  // 在lockfree情况下，必须ClientNum = SSDNum + AEPNum
+const int AEPNum = 26;  // 在lockfree情况下，必须ClientNum = SSDNum + AEPNum
 // aep thread [0, 26],  ssd thread[27, 49]
 #define IsSSDThread(tid) ((tid) >= AEPNum)
 

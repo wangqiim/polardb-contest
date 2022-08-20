@@ -143,14 +143,6 @@ int Engine::Init() {
 
 int Engine::Append(const void *datas) {
   _mm_prefetch(datas, _MM_HINT_T0);
-  if (likely(write_cnt >= 2000)) {
-    if (tid_ < AEPNum) {
-      pmem_logs_[tid_]->Append(datas);
-    } else {
-      disk_logs_[tid_ - AEPNum]->Append(datas);
-    }
-    return 0;
-  }
   if (unlikely(phase_.load() == Phase::ReadOnly)) {
     bool current = is_changing_.exchange(true);
     if (current == false) {
