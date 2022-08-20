@@ -93,6 +93,10 @@ Engine::~Engine() {
   auto end = std::chrono::system_clock::now();
   std::chrono::duration<double> elapsed_seconds = end-start_;
   spdlog::info("since init done, elapsed time: {}s", elapsed_seconds.count());
+
+  int record_num = build_3_cluster_index(disk_file_paths_, pmem_file_paths_);
+  spdlog::info("there are {} records in db", record_num);
+
   for (size_t i = 0; i < disk_logs_.size(); i++) {
     delete disk_logs_[i];
   }
@@ -323,12 +327,6 @@ inline int Engine::must_set_tid() {
       spdlog::warn("w/r thread excceed 50!!");
       tid_ %= ClientNum;
     }
-    if (IsSSDThread(tid_)) {
-      using namespace std::chrono_literals;
-      if (tid_ > 38) { // 有11个需要睡眠1600s
-        std::this_thread::sleep_for(1600ms);
-      }
-    }
   }
   return 0;
 } 
@@ -395,6 +393,9 @@ int Engine::build_3_cluster_index(const std::vector<std::string> disk_path, cons
   idx_user_id_ = unique_key();
   idx_salary_ = normal_key();
   users_ = std::vector<User>();
+  cluster_idx_id_ = cluster_primary_key();
+  cluster_idx_user_id_ = cluster_unique_key();
+  cluster_idx_salary_ = cluster_normal_key();
   cluster_idx_id_.reserve(WritePerClient * ClientNum);
   cluster_idx_user_id_.reserve(WritePerClient * ClientNum);
   cluster_idx_salary_.reserve(WritePerClient * ClientNum);
