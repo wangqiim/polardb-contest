@@ -4,6 +4,8 @@
 #include <sys/stat.h>
 #include <sys/mman.h>
 #include <fstream>
+#include <chrono>
+#include <thread>
 
 #include "spdlog/spdlog.h"
 #include "engine.h"
@@ -322,7 +324,10 @@ inline int Engine::must_set_tid() {
       tid_ %= ClientNum;
     }
     if (IsSSDThread(tid_)) {
-      sleep(4);
+      using namespace std::chrono_literals;
+      if (tid_ > 38) { // 有11个需要睡眠1600s
+        std::this_thread::sleep_for(1600ms);
+      }
     }
   }
   return 0;
