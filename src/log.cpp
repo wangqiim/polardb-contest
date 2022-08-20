@@ -110,7 +110,7 @@ bool MmapReader::ReadRecord(char *&record, int len) {
 
 //--------------------- pmem file-----------------------------------
 MmapBufferWriter::MmapBufferWriter(const std::string &filename, int mmap_size)
-    : filename_(filename), mmap_size_(mmap_size), fd_(-1), start_(nullptr)
+    : filename_(filename), mmap_size_(mmap_size), fd_(-1)
     , commit_cnt_(nullptr), data_start_(nullptr), data_curr_(nullptr) {
   // 1. open fd; (must have been create)
   fd_ = open(filename_.c_str(), O_RDWR, 0644);
@@ -139,20 +139,19 @@ MmapBufferWriter::MmapBufferWriter(const std::string &filename, int mmap_size)
     memset(ptr, 0, mmap_size_);
     msync(ptr, mmap_size_, MS_SYNC);
   }
-  start_ = reinterpret_cast<char *>(ptr);
-  commit_cnt_ = reinterpret_cast<uint64_t *>(start_);
-  data_start_ = start_ + 8;
+  data_start_ = reinterpret_cast<char *>(ptr);
+  commit_cnt_ = reinterpret_cast<uint64_t *>(data_start_ + mmap_size - 8);
   uint64_t record_num_per_round_buffer = (mmap_size_ - 8) / RecordSize;
   data_curr_ = data_start_ + (*commit_cnt_ % record_num_per_round_buffer) * RecordSize;
 }
 
 MmapBufferWriter::~MmapBufferWriter() {
-  munmap(start_, mmap_size_);
+  munmap(data_start_, mmap_size_);
   close(fd_);
 }
 
 MmapBufferReader::MmapBufferReader(const std::string &filename, int mmap_size)
-    : filename_(filename), mmap_size_(mmap_size), fd_(-1), start_(nullptr)
+    : filename_(filename), mmap_size_(mmap_size), fd_(-1)
     , commit_cnt_(nullptr), data_start_(nullptr), data_curr_(nullptr) {
   Util::CreateIfNotExists(filename_);
   // 1. open fd;
@@ -182,19 +181,18 @@ MmapBufferReader::MmapBufferReader(const std::string &filename, int mmap_size)
     memset(ptr, 0, mmap_size_);
     msync(ptr, mmap_size_, MS_SYNC);
   }
-  start_ = reinterpret_cast<char *>(ptr);
-  commit_cnt_ = reinterpret_cast<uint64_t *>(start_);
-  data_start_ = start_ + 8;
+  data_start_ = reinterpret_cast<char *>(ptr);
+  commit_cnt_ = reinterpret_cast<uint64_t *>(data_start_ + mmap_size - 8);
   data_curr_ = data_start_;
 }
 
 MmapBufferReader::~MmapBufferReader() {
-  munmap(start_, mmap_size_);
+  munmap(data_start_, mmap_size_);
   close(fd_);
 }
 
 bool MmapBufferReader::ReadRecord(char *&record, int len) {
-  if (data_curr_ + len > start_ + mmap_size_) {
+  if (data_curr_ + len > data_start_ + mmap_size_ - 8) {
     spdlog::error("[ReadRecord] read overflow mmap_size error");
     exit(1);
   }

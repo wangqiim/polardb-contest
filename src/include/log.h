@@ -67,7 +67,7 @@ class MmapBufferWriter {
   MmapBufferWriter& operator=(const MmapBufferWriter&) = delete;
 
   int Append(const void* data) {
-    if (data_curr_ + RecordSize > start_ + mmap_size_) {
+    if (data_curr_ + RecordSize > data_start_ + mmap_size_ - 8) {
       return -1;
     }
     memcpy(data_curr_, data, 256);
@@ -93,7 +93,6 @@ class MmapBufferWriter {
   const std::string filename_;
   int mmap_size_;
   int fd_;
-  char *start_;
   uint64_t *commit_cnt_; // commit_cnt_ = (uint64_t *)mmap_start_ptr
   char *data_start_; // data_start_ = (char *)mmap_start_ptr + 8
   char *data_curr_;
@@ -113,7 +112,6 @@ class MmapBufferReader {
   const std::string filename_;
   int mmap_size_;
   int fd_;
-  char *start_;
   uint64_t *commit_cnt_; // commit_cnt_ = (uint64_t *)mmap_start_ptr
   char *data_start_; // data_start_ = (char *)mmap_start_ptr + 8
   char *data_curr_;
