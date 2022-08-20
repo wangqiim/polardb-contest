@@ -27,15 +27,22 @@ public:
     }
 
     void printX() const {
-      printf("%04hX-", id);
-      for (int i = 0; i < 128; i+= 8) {
-        printf("%04hX", *(uint64_t *)(user_id + i));
+      char *t = (char *)this;
+      for (int i = 0; i < sizeof(id); i++, t++) {
+        printf("%02hX", *t);
       }
-      printf("-", id);
-      for (int i = 0; i < 128; i+= 8) {
-        printf("%04hX", *(uint64_t *)(name + i));
+      printf("-");
+      for (int i = 0; i < sizeof(user_id); i++, t++) {
+        printf("%02hX", *t);
       }
-      printf("-%04hX ", salary);
+      printf("-");
+      for (int i = 0; i < sizeof(name); i++, t++) {
+        printf("%02hX", *t);
+      }
+      printf("-");
+      for (int i = 0; i < sizeof(salary); i++, t++) {
+        printf("%02hX", *t);
+      }
     }
 };
 
