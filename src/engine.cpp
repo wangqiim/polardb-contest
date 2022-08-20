@@ -136,7 +136,20 @@ int Engine::Init() {
 
 int Engine::Append(const void *datas) {
   if (phase_.load() == Phase::ReadOnly) {
-    phase_.store(Phase::Hybrid);
+    bool current = is_changing_.exchange(true);
+    if (current == false) {
+      // current可能和一个刚刚建完索引的线程冲突，因此做一次double check
+      if (phase_.load() == Phase::ReadOnly) {
+        // 1. 睡眠一段时间，保证其他线程探测到is_changing_ = true 并且阻塞住，
+        // 使得建立索引的过程中没有正在进行中的R/W（只能说无锁，尽量多睡眠一段时间）
+        sleep(FenceSecond);
+        // 2. 先修改phase_
+        phase_.store(Phase::Hybrid);
+        // 3. 再修改is_changing_
+        is_changing_.store(false);
+        spdlog::info("phase change: ReadOnly -> Hybrid");
+      }
+    }
   }
   while (is_changing_.load() == true) {
     sleep(WaitChangeFinishSecond);
@@ -170,12 +183,12 @@ int Engine::Append(const void *datas) {
   if (cur_phase == Phase::Hybrid) {
     mtx_.unlock();
   }
-  // write_cnt++;
-  // if (write_cnt == WritePerClient) {
-  //   auto end = std::chrono::system_clock::now();
-  //   std::chrono::duration<double> elapsed_seconds = end-start_;
-  //   spdlog::info("tid[{}] finish write {} records, elapsed time: {}s", tid_, WritePerClient, elapsed_seconds.count());
-  // }
+  write_cnt++;
+  if (write_cnt == WritePerClient) {
+    auto end = std::chrono::system_clock::now();
+    std::chrono::duration<double> elapsed_seconds = end-start_;
+    spdlog::info("tid[{}] finish write {} records, elapsed time: {}s", tid_, WritePerClient, elapsed_seconds.count());
+  }
   return 0;
 }
 
