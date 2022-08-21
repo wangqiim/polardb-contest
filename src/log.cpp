@@ -96,8 +96,8 @@ MmapReader::~MmapReader() {
 
 bool MmapReader::ReadRecord(char *&record, int len) {
   if (data_curr_ + len > data_start_ + mmap_size_) {
-    spdlog::error("[ReadRecord] read overflow mmap_size error");
-    exit(1);
+    spdlog::warn("[MmapReader::ReadRecord] read done, otherwise overflow mmap_size");
+    return false;
   }
   if (static_cast<uint64_t>(data_curr_ - data_start_) / RecordSize < cnt_) {
     record = data_curr_;
@@ -192,7 +192,7 @@ MmapBufferReader::~MmapBufferReader() {
 
 bool MmapBufferReader::ReadRecord(char *&record, int len) {
   if (data_curr_ + len > data_start_ + mmap_size_ - 8) {
-    spdlog::error("[ReadRecord] read overflow mmap_size error");
+    spdlog::error("[MmapBufferReader::ReadRecord] read overflow mmap_size error");
     exit(1);
   }
   if (static_cast<uint64_t>(data_curr_ - data_start_) / RecordSize < *commit_cnt_) {
