@@ -121,8 +121,8 @@ int Engine::Init() {
   }
 
   // build index
-  Util::gen_sorted_paths(dir_, WALFileNamePrefix, disk_file_paths_, SSDNum);
-  Util::gen_sorted_paths(aep_dir_, WALFileNamePrefix, pmem_file_paths_, AEPNum);
+  Util::gen_sorted_paths(dir_, WALFileNamePrefix, disk_file_paths_, ClientNum);
+  Util::gen_sorted_paths(aep_dir_, WALFileNamePrefix, pmem_file_paths_, ClientNum);
   
   int record_num = replay_index(disk_file_paths_, pmem_file_paths_);
   if (record_num == ClientNum * WritePerClient) {
@@ -169,10 +169,10 @@ int Engine::Append(const void *datas) {
   }
   const User *user = reinterpret_cast<const User *>(datas);
 
-  if (tid_ < AEPNum) {
+  if (IsWriteAEP(write_cnt)) {
     pmem_logs_[tid_]->Append(datas);
   } else {
-    disk_logs_[tid_ - AEPNum]->Append(datas);
+    disk_logs_[tid_]->Append(datas);
   }
 
   if (cur_phase == Phase::Hybrid) {

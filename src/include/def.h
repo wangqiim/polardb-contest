@@ -10,7 +10,9 @@ const unsigned long CommitFlag = 0xFFFFFFFFFFFFFFFF;
 const int CommitField = 8;
 const char WALFileNamePrefix[] = "WAL";
 const int PoolSize = 1 << 29; // 512MB can't exceed 1GB
-const int MmapSize = 272800000; // 281018368 data: 272000000
+// 272 * 5e7 * (24 / 50) / 50 = 130560000
+// 130560000 + 8
+const int MmapSize = 130560000 + 8; // 281018368 data: 272000000
 
 const char PmapBufferWriterFileNameSuffix[] = "BUF";
 const int PmapBufferWriterSize = 4352; // LCM(256, 272) write 256 per write pmem
@@ -21,8 +23,7 @@ const int WritePerClient = 1000000;
 const int ClientNum = 50;
 const int SSDNum = 24;  // 在lockfree情况下，必须ClientNum = SSDNum + AEPNum
 const int AEPNum = 26;  // 在lockfree情况下，必须ClientNum = SSDNum + AEPNum
-// aep thread [0, 26],  ssd thread[27, 49]
-#define IsSSDThread(tid) ((tid) >= AEPNum)
+#define IsWriteAEP(write_cnt) ((write_cnt) % 50 < AEPNum)
 
 const int WaitChangeFinishSecond = 3;
 const int FenceSecond = 10;
