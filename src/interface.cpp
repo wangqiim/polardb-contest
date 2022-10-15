@@ -3,17 +3,7 @@
 #include <vector>
 #include <string.h>
 #include "spdlog/spdlog.h"
-
-class User
-{
-public:
-    int64_t id;
-    char user_id[128];
-    char name[128];
-    int64_t salary;
-};
-
-enum Column{Id=0,Userid,Name,Salary};
+#include "user.h"
 
 std::vector<User> users;
 
